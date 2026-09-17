@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Embedded players · WDIM detection lab</title>
+    <link rel="stylesheet" href="/fixture.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">WDIM <span>/ detection lab</span></a>
+    </header>
+    <main>
+      <h1>Players inside players</h1>
+      <p class="intro">
+        This page has no ordinary top-level video. It tests embedded players,
+        shadow roots, dynamic insertion, picture-in-picture, and multiple tabs.
+      </p>
+      <div class="controls">
+        <button id="add-iframe">Add cross-origin player</button>
+        <button id="add-open">Add open-shadow player</button>
+        <button id="add-closed">Add closed-shadow player</button>
+        <button id="add-blank">Add srcdoc player</button>
+        <button id="add-hidden">Add hidden playing video</button>
+        <button id="remove-players">Remove all players</button>
+        <a href="/?second-tab=1" target="_blank" rel="noopener"
+          >Open another video tab ↗</a
+        >
+      </div>
+      <p id="lab-status" role="status">
+        Choose a player to add, then open WDIM.
+      </p>
+      <div id="players"></div>
+    </main>
+    <script type="module" src="/players.js"></script>
+  </body>
+</html>

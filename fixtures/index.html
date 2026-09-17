@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The quiet interval · WDIM local fixture</title>
+    <link rel="stylesheet" href="/fixture.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">WDIM <span>/ local screening room</span></a
+      ><span class="local-label">OFFLINE VIDEO FIXTURE</span>
+    </header>
+    <main>
+      <p class="eyebrow">A PLACE TO TRY THINGS</p>
+      <p>
+        <a href="/players.html">Open the embedded-player detection lab →</a>
+      </p>
+      <h1>The quiet interval</h1>
+      <p class="intro">
+        A 90-second synthetic video. Play, pause, or skip ahead, then ask your
+        companion what you missed.
+      </p>
+      <div id="player-container">
+        <video
+          id="main-video"
+          controls
+          preload="auto"
+          muted
+          playsinline
+          src="/sample.webm"
+          aria-label="Local test video"
+        ></video>
+      </div>
+      <div class="controls">
+        <button id="play-pause">Play / pause</button>
+        <button data-seek="12">Seek to 0:12</button>
+        <button data-seek="47">Seek to 0:47</button>
+        <button id="fullscreen">Container fullscreen</button>
+      </div>
+      <p id="player-status" role="status">Loading local video…</p>
+      <div class="testing-notes">
+        <div>
+          <h2>Try the companion</h2>
+          <p>
+            Open <strong>WDIM</strong> in the bottom-right corner. Send a
+            question at 0:47, then seek back to 0:12. The previous conversation
+            should clear.
+          </p>
+        </div>
+        <div>
+          <h2>Try the edges</h2>
+          <p>
+            Container fullscreen can include the widget. The video's native
+            fullscreen control may hide it. Escape returns to the page.
+          </p>
+        </div>
+      </div>
+      <details>
+        <summary>More fixture controls</summary>
+        <div class="controls">
+          <button id="remove-video">Remove video</button
+          ><button id="restore-video">Restore video</button
+          ><button id="second-video">Toggle second video</button
+          ><button id="host-css">Toggle hostile host CSS</button
+          ><button id="change-route">Simulate media navigation</button>
+        </div>
+        <p>
+          These controls test DOM replacement, selection, style isolation, and
+          SPA navigation.
+        </p>
+      </details>
+    </main>
+    <footer>
+      Generated locally · no copyrighted movie footage · no external requests
+    </footer>
+    <script type="module" src="/fixture.js"></script>
+  </body>
+</html>

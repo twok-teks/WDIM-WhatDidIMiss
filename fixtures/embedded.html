@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Third-party embedded test player</title>
+    <link rel="stylesheet" href="/fixture.css" />
+  </head>
+  <body>
+    <video
+      controls
+      muted
+      playsinline
+      preload="auto"
+      src="/sample.webm"
+      aria-label="Embedded movie player"
+    ></video>
+    <button id="pip">Picture-in-picture</button>
+    <button id="seek">Seek embedded to 0:47</button>
+    <script type="module" src="/embedded.js"></script>
+  </body>
+</html>
