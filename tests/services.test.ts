@@ -61,6 +61,7 @@ describe('adapter selection and provisional identity', () => {
       id: 'future-site',
       supports: () => false,
       identify: generic.identify,
+      readPlayback: generic.readPlayback,
     };
     expect(selectAdapter([site, generic], new URL('https://example.com'))).toBe(
       generic,

@@ -72,7 +72,7 @@ describe('video context lifecycle', () => {
         configurable: true,
         value: Infinity,
       });
-      expect(source.read().context?.position).toEqual({
+      expect(source.read().context?.rawPosition).toEqual({
         currentTimeSeconds: 33,
         durationSeconds: null,
       });

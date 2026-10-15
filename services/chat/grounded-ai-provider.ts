@@ -1,0 +1,64 @@
+import { canAsk } from '../../domain/spoilers/playback';
+import { captionQuery, NO_CAPTIONS } from '../../domain/spoilers/captions';
+import { validateCaptionResult } from '../../domain/spoilers/caption-result';
+import type { ProviderQuery } from '../../domain/spoilers/provider-query';
+import {
+  UNVERIFIED_CONTEXT,
+  parseGroundedQuery,
+  renderGroundedResult,
+  validateGroundedResult,
+} from '../../domain/spoilers/grounding';
+import type { AIProvider, ChatRequest } from './chat-service';
+
+export interface GroundedTransport {
+  answer(query: ProviderQuery, signal: AbortSignal): Promise<unknown>;
+}
+
+export class GroundedAIProvider implements AIProvider {
+  readonly mode = 'grounded' as const;
+  constructor(private transport: GroundedTransport) {}
+
+  async answer(request: ChatRequest, signal: AbortSignal): Promise<string> {
+    signal.throwIfAborted();
+    if (
+      request.playback.captionStatus &&
+      request.playback.media.confidence !== 'verified'
+    ) {
+      const query = captionQuery(
+        request.question,
+        request.playback,
+        request.contextOptions ?? { background: false, earlierWorks: false },
+      );
+      if (!query || !query.captions.length) return NO_CAPTIONS;
+      const result = await this.transport.answer(query, signal);
+      signal.throwIfAborted();
+      return renderGroundedResult(validateCaptionResult(result, query));
+    }
+    if (
+      !canAsk(request.playback) ||
+      request.playback.timeline.phase !== 'content'
+    ) {
+      if (request.playback.timeline.phase !== 'unclassified')
+        throw new Error('Playback unavailable.');
+      return UNVERIFIED_CONTEXT;
+    }
+    if (
+      request.playback.media.confidence !== 'verified' ||
+      request.boundary.timelineMapping !== 'verified'
+    )
+      return UNVERIFIED_CONTEXT;
+    const query = parseGroundedQuery({
+      question: request.question,
+      boundary: {
+        mediaId: request.boundary.mediaId,
+        maximumAllowedTimestamp: request.boundary.maximumAllowedTimestamp,
+        timelineMapping: request.boundary.timelineMapping,
+      },
+    });
+    const result = await this.transport.answer(query, signal);
+    signal.throwIfAborted();
+    return renderGroundedResult(
+      validateGroundedResult(result, request.boundary),
+    );
+  }
+}

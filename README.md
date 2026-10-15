@@ -2,7 +2,7 @@
 
 A browser video companion for questions about **what you have watched so far**.
 
-This first milestone detects an HTML5 video, tracks playback, and passes a timestamp-bound snapshot to a local mock chat provider. There are no AI API calls, secrets, accounts, or backend services.
+WDIM detects HTML5 videos, tracks playback, and creates timestamp-bound questions. The default build uses a local mock. An opt-in AI build uses a local gateway and Groq's `openai/gpt-oss-120b` on-demand model to select bounded caption evidence and reviewed facts. See [AI setup](docs/AI.md).
 
 ## The defining rule
 
@@ -10,7 +10,7 @@ This first milestone detects an HTML5 video, tracks playback, and passes a times
 
 Every provider request carries an immutable `SpoilerBoundary` and an `AllowedContextWindow`. Unknown timing blocks sending. Rewinding, losing the video, or changing media clears the conversation and invalidates pending responses. Predecessor-media context is denied by default and requires explicit approval plus verified release order.
 
-Future retrieval must remove later facts **before** they reach a model. These contracts establish the boundary; they are not a claim that a prompt makes an unrestricted LLM spoiler-proof.
+Retrieval removes later facts **before** they reach the model. Only validated selections of trusted facts can become an answer; generated model prose is never displayed. Correct identity, timeline mapping, and reveal annotations remain required.
 
 ## Current MVP
 
@@ -29,7 +29,7 @@ Future retrieval must remove later facts **before** they reach a model. These co
 
 ## Start locally
 
-Requires Node.js 22+ and npm. Node 24 was used for validation.
+Requires Node.js 22.18+ and npm. Node 24 was used for validation.
 
 ```sh
 npm install
@@ -91,7 +91,8 @@ WXT, React, strict TypeScript, Manifest V3, modern CSS, Vitest, React Testing Li
 | `entrypoints/content/`                  | Injection, Shadow DOM, cleanup, fullscreen placement |
 | `services/video/`, `services/adapters/` | Video selection and playback snapshots               |
 | `domain/media/`, `domain/spoilers/`     | Identity, formatting, boundaries, allowed knowledge  |
-| `services/chat/`                        | Bounded request construction and local mock          |
+| `services/chat/`                        | Bounded requests, mock, and optional AI transport    |
+| `server/`                               | Local gateway, curated catalog, server-only Groq key |
 | `components/`, `hooks/`, `styles/`      | Widget, themes, conversation lifecycle               |
 | `storage/`                              | Theme preference only                                |
 | `fixtures/`, `scripts/`                 | Offline page/media and development commands          |
@@ -116,10 +117,10 @@ The adapter knows the page title, not the movie. Automatic selection may choose 
 
 Chrome's internal media controls also include media sessions and Cast routes; they are not a complete public extension discovery API. Remote-only Cast sessions, restricted pages, denied frames, and players with no accessible HTML video cannot be guaranteed. PiP video timing can be tracked, but the widget stays on the webpage; native video/iframe fullscreen and PiP windows cannot host its overlay. DRM internals and movie recognition remain outside this milestone. See [detection coverage](docs/ARCHITECTURE.md#video-detection-and-adapters).
 
-The mock has no story knowledge. There is no conversation persistence, movie database, ingestion pipeline, backend, or production spoiler guarantee. Only theme is stored. Broad site access supports generic pages and can be restricted through browser settings.
+The mock has no story knowledge. The AI build answers from captions observed in the current session; enable captions and let them appear before asking. It cannot reconstruct earlier scenes or recognize a movie from its page title. Sourced background and reviewed earlier works have separate opt-ins. See [platform coverage](docs/PLATFORMS.md). Only theme persists; captions and conversations stay in memory. Site access can be restricted through browser settings.
 
 Automated Chromium interactions and both builds are validated. Actual Edge/Firefox interactions still need the documented manual pass.
 
 ## Next milestone
 
-First verify detection on the actual third-party player URLs; representative local embeds are covered, but no specific failing site URL was supplied. Then add a tiny hand-authored story fixture and verified media mapping. Exercise retrieval exclusion immediately before/at/after each reveal, including rewind and predecessor rules, before introducing a backend or real LLM. Site adapters can follow once identity and timing contracts are established.
+Validate the caption readers on actual accounts and player variants for the five priority platforms, especially Hulu's proprietary renderer. Caption-based answers now work through the UI; full-story retrieval still needs independently verified media identity, story-time mapping, and curated reveal annotations. Broader online context needs verifiable source boundaries, not unrestricted plot search.

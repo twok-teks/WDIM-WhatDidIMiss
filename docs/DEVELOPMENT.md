@@ -2,7 +2,7 @@
 
 ## Install and launch
 
-From the repository root with Node.js 22+:
+From the repository root with Node.js 22.18+:
 
 ```sh
 npm install
@@ -120,7 +120,7 @@ Future popup/options pages have their own DevTools. Inspect the popup itself or 
 
 ### Network
 
-Application code has no backend requests. The fixture loads local HTML/CSS/JS/video; the widget loads extension CSS. WXT development adds localhost tooling connections. Use Network's Fetch/XHR filter when reviewing future data transmission.
+The default build has no AI requests. The AI build sends bounded caption/verified-evidence questions through the worker to `http://127.0.0.1:8787/v1/answer`; the gateway calls Groq and optionally performs the explicitly enabled Wikidata name lookup. Inspect the worker's Network panel for gateway requests. Keys stay in the ignored `server/.env`, never extension code. The fixture uses local media; WXT development adds localhost tooling. See [AI setup](AI.md) for configuration, limitations, and live validation.
 
 ## Microsoft Edge
 
@@ -159,7 +159,23 @@ Unlike Chrome, select the manifest file, not its directory. Temporary add-ons di
 
 Both targets explicitly use MV3 rather than WXT's Firefox MV2 default. The Firefox manifest declares a local ID and no off-device data collection, following [Mozilla's manifest guidance](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/). No store publishing/signing is configured. The build is validated; actual Firefox interaction testing remains manual.
 
+## Working on playback and ads
+
+The generic adapter does not identify ads. The widget labels its time as unverified and holds the chosen player after the first question, including while minimized. Closing chat releases this conversation hold; an explicit manual selection remains pinned. Use the picker to choose Automatic or another player at any time.
+
+An unexplained change from a known finite duration suspends tracking for that media identity. Refresh rescans but does not remove this uncertainty; a new source/page identity or page reload starts a new unverified session. Rewinds and source changes continue to clear chat. Playback itself is never paused or sought by WDIM.
+
+`SiteAdapter.readPlayback` remains the integration point for independently verified story mapping. The generic identity/timing adapter stays unverified. Separately, `services/adapters/platform-captions.ts` implements caption capabilities for the five priority platforms and a fallback. Its ad signals suspend capture; they never certify a story timeline. See [PLATFORMS.md](PLATFORMS.md) for live validation gaps.
+
+Developer context includes raw time, effective position, timeline phase/mapping/continuity, and separate request/conversation revisions. Confirmed ads cancel requests while retaining safe messages; unknown context invalidates both. See [ARCHITECTURE.md](ARCHITECTURE.md) for the contract and [TESTING.md](TESTING.md) for coverage.
+
 ## Command reference
+
+For the opt-in AI build, use `npm run build:ai` or `npm run build:ai:firefox`; run the gateway with `npm run ai:server`. `npm run test:e2e:ai` uses a fake model; `npm run test:e2e:ai:live` makes four potentially billable Groq requests with synthetic evidence, including actual caption-to-chat UI requests. Both rebuild Chrome AI output. Default builds overwrite the same directories with mock mode.
+
+On the fixture, click **Enable caption demo**, play briefly, then ask **What is Mira holding?** On external sites, enable captions and check the excerpt count. A persistent zero count means that caption surface is unavailable; do not disable boundary validation. Use a normally launched browser with the unpacked build for interactive YouTube testing: the automated Playwright session produced playback errors on the reported machine, while a native Brave launch worked.
+
+After rebuilding an unpacked extension, use **Reload** on its card in `brave://extensions` or `chrome://extensions`, then reload the video tabs. Restarting the browser alone can retain a cached background worker while loading newer content scripts from disk. If WDIM repeatedly shows **Reconnecting to video discovery…**, reload the extension first. The local Brave profile reproduced this with a cached v2 worker and v3 page scripts; reloading the extension and restarting restored discovery. This does not require clearing browsing data or changing DNS.
 
 | Command                 | Purpose                                     |
 | ----------------------- | ------------------------------------------- |

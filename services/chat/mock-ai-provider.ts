@@ -21,6 +21,10 @@ export class MockAIProvider implements AIProvider {
       this.options.failNext = false;
       throw new Error('Simulated provider failure');
     }
-    return `Your question reached the local mock at ${formatTimestamp(request.boundary.maximumAllowedTimestamp)}.\n\nThe allowed window is 0:00–${formatTimestamp(request.boundary.maximumAllowedTimestamp)} of this video. No previous movies are included.\n\nI don't have story knowledge yet, so I can't explain the scene. A future provider will receive only context permitted by this boundary.`;
+    const timing =
+      request.boundary.timelineMapping === 'verified'
+        ? `The allowed window is 0:00–${formatTimestamp(request.boundary.maximumAllowedTimestamp)} of this video. No previous movies are included.`
+        : 'This is the player clock. Story timing is unverified, so no story facts are allowed.';
+    return `Your question reached the local mock at ${formatTimestamp(request.boundary.maximumAllowedTimestamp)}.\n\n${timing}\n\nI don't have story knowledge yet, so I can't explain the scene.`;
   }
 }

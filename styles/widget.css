@@ -506,6 +506,23 @@ h2 {
     transition: none !important;
   }
 }
+.context-options {
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.context-options summary {
+  cursor: pointer;
+}
+.context-options label {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+.context-options input {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 @media (max-width: 420px) {
   .chat-panel {
     right: 12px;

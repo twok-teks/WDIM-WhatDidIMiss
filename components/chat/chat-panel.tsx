@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatTimestamp } from '../../domain/media/types';
 import { boundaryStillAllowed } from '../../domain/spoilers/boundary';
+import { canAsk } from '../../domain/spoilers/playback';
 import { useChat } from '../../hooks/use-chat';
 import type { ChatService } from '../../services/chat/chat-service';
 import type {
@@ -42,17 +43,17 @@ export function ChatPanel(props: ChatPanelProps) {
     debug,
   } = props;
   const { context } = snapshot;
+  const [background, setBackground] = useState(false);
+  const [earlierWorks, setEarlierWorks] = useState(false);
   const { messages, loading, error, send } = useChat(
     source,
     service,
     snapshot.safetyRevision,
+    { background, earlierWorks },
   );
   const panel = useRef<HTMLElement>(null);
-  const knownTime = context?.position.currentTimeSeconds;
-  const canSend =
-    knownTime !== null &&
-    knownTime !== undefined &&
-    context?.state !== 'loading';
+  const knownTime = context?.position.currentTimeSeconds ?? null;
+  const canSend = canAsk(context);
   // Render-time filtering backs up revision-based unmounting: unsafe messages never paint.
   const visibleMessages = messages.filter((message) =>
     boundaryStillAllowed(message.boundary, context),
@@ -111,6 +112,15 @@ export function ChatPanel(props: ChatPanelProps) {
       <div className="video-context">
         <VideoPicker source={source} snapshot={snapshot} />
         <MediaStatus context={context} />
+        {service.mode === 'grounded' && context?.captionStatus && (
+          <p className="boundary-hint" role="status">
+            {context.captionStatus.state === 'blocked'
+              ? 'Caption capture suspended · player timing or ad state changed.'
+              : context.captionStatus.count
+                ? `${context.captionStatus.count} caption excerpts observed since ${formatTimestamp(context.captionStatus.since)}. Earlier scenes are not available.`
+                : 'Turn on the player’s captions and play to build context. Only captions displayed from now on are available.'}
+          </p>
+        )}
         {context && (
           <p className="page-title" title={context.pageTitle}>
             {context.pageTitle}
@@ -131,11 +141,15 @@ export function ChatPanel(props: ChatPanelProps) {
           <p>
             {canSend
               ? "Ask about what you've watched so far."
-              : 'Open a video on this page to get started.'}
+              : context
+                ? 'Tracking is suspended. Your video can keep playing.'
+                : 'Open a video on this page to get started.'}
           </p>
           <p className="boundary-hint">
             {canSend
-              ? `Your boundary is ${formatTimestamp(knownTime)}. Nothing past this point.`
+              ? context?.timeline.mapping === 'verified'
+                ? `Your boundary is ${formatTimestamp(knownTime)}. Nothing past this point.`
+                : `Player time ${formatTimestamp(knownTime)}. Story timing is unverified.`
               : 'A known playback position is needed before you can send.'}
           </p>
           {canSend && (
@@ -150,7 +164,12 @@ export function ChatPanel(props: ChatPanelProps) {
           )}
         </div>
       ) : (
-        <MessageList messages={visibleMessages} loading={loading} open={open} />
+        <MessageList
+          messages={visibleMessages}
+          loading={loading}
+          open={open}
+          mode={service.mode}
+        />
       )}
       {loading && visibleMessages.length === 0 && (
         <p className="thinking" role="status">
@@ -168,10 +187,40 @@ export function ChatPanel(props: ChatPanelProps) {
         </p>
       )}
       <div className="panel-bottom">
+        {service.mode === 'grounded' && (
+          <details className="context-options">
+            <summary>Related context</summary>
+            <label>
+              <input
+                type="checkbox"
+                checked={background}
+                disabled={loading}
+                onChange={(event) => setBackground(event.target.checked)}
+              />{' '}
+              Include sourced background about names already mentioned
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={earlierWorks}
+                disabled={loading}
+                onChange={(event) => setEarlierWorks(event.target.checked)}
+              />{' '}
+              Include reviewed earlier works (may reveal their full plots)
+            </label>
+            <p className="boundary-hint">
+              Background can look up a matching name on Wikidata. Earlier works
+              require a verified relationship and release order in the source
+              catalog. No unrestricted web or plot search.
+            </p>
+          </details>
+        )}
         <ChatInput canSend={canSend} loading={loading} onSend={send} />
         <p className="privacy-note">
           <Icon name="shield" size={12} />
-          Local mock · no story knowledge · nothing sent
+          {service.mode === 'mock'
+            ? 'Local mock · no story knowledge · nothing sent'
+            : 'Groq AI · observed captions or verified facts · no chat saved'}
         </p>
       </div>
       {debug && (
@@ -182,6 +231,8 @@ export function ChatPanel(props: ChatPanelProps) {
               {
                 adapter: snapshot.adapterId,
                 currentTime: context?.position.currentTimeSeconds,
+                rawTime: context?.rawPosition.currentTimeSeconds,
+                timeline: context?.timeline,
                 duration: context?.position.durationSeconds,
                 pageTitle: context?.pageTitle,
                 url: context?.pageUrl,
@@ -191,6 +242,7 @@ export function ChatPanel(props: ChatPanelProps) {
                 discovery: snapshot.discoveryStatus,
                 state: context?.state,
                 safetyRevision: snapshot.safetyRevision,
+                requestRevision: snapshot.requestRevision,
               },
               null,
               2,

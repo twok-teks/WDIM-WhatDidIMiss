@@ -1,5 +1,7 @@
 # Local video fixture
 
+**AI caption demo:** click **Enable caption demo** on the fixture. This adds a displayed native caption track with a fictional envelope story over the landscape animation; it does not claim the animation depicts those events. Play briefly, then ask **What is Mira holding?** The later reveal at 1:00 cannot enter the observed-caption window before it is displayed. Rewinding clears captured context and answers.
+
 `sample.webm` is an original, generated 90-second silent animation (VP8, 960×540, 1 fps). It is bundled here so seeking and finite duration work offline. It contains simple landscape geometry, an elapsed-time label, and a progress line, not movie content. No external media host, license dependency, or runtime generator is involved. This directory is excluded from extension builds by WXT's normal entrypoint/public-directory rules.
 
 Run `npm run fixture` and visit **http://localhost:3000**. `npm run dev` already starts this server. Only one process can own port 3000.

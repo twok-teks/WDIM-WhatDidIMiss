@@ -16,6 +16,7 @@ it('shows videos grouped across tabs, selects explicitly, restores auto, and res
     label: 'Embedded movie',
     context: playback(),
     safetyRevision: 1,
+    requestRevision: 1,
     visible: true,
     area: 100,
     pictureInPicture: false,

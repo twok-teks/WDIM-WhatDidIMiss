@@ -1,3 +1,5 @@
+import type { CaptionEvidence, CaptionStatus } from '../spoilers/captions';
+
 export interface ReleasePosition {
   readonly seriesId: string;
   readonly order: number;
@@ -17,9 +19,22 @@ export interface PlaybackPosition {
 
 export type PlaybackState = 'loading' | 'playing' | 'paused' | 'ended';
 
+export interface PlaybackTimeline {
+  readonly phase: 'unclassified' | 'content' | 'ad' | 'unknown';
+  readonly mapping: 'verified' | 'unverified' | 'unavailable';
+  readonly continuity: 'established' | 'unknown';
+}
+
 export interface PlaybackContext {
+  readonly captionStatus?: CaptionStatus;
+  // Present only in an authenticated fresh read, never the broadcast video catalog.
+  readonly captionEvidence?: CaptionEvidence;
   readonly media: MediaIdentity;
+  // Mapped/held story time, or an explicitly unverified clock for the empty mock.
   readonly position: PlaybackPosition;
+  // Always sampled directly from the owning video element; never adjusted for ads.
+  readonly rawPosition: PlaybackPosition;
+  readonly timeline: PlaybackTimeline;
   readonly state: PlaybackState;
   readonly pageTitle: string;
   readonly pageUrl: string;

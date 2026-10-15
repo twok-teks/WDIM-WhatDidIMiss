@@ -1,6 +1,12 @@
 import { createId } from '../id';
+import { CaptionCollector } from './caption-collector';
 import type { PlaybackContext } from '../../domain/media/types';
 import { sanitizePageUrl } from '../../domain/media/types';
+import {
+  conversationInvalidated,
+  holdAdPosition,
+  requestInvalidated,
+} from '../../domain/spoilers/playback';
 import { GenericHtml5Adapter } from '../adapters/generic-html5-adapter';
 import { selectAdapter, type SiteAdapter } from '../adapters/site-adapter';
 import { selectActiveVideo } from './video-detector';
@@ -34,11 +40,13 @@ const mediaEvents = [
 ] as const;
 
 export class VideoContextProvider implements VideoContextSource {
+  private captions = new CaptionCollector();
   private snapshot: VideoSnapshot = {
     context: null,
     detectedVideoCount: 0,
     adapterId: 'generic-html5',
     safetyRevision: 0,
+    requestRevision: 0,
   };
   private listeners = new Set<() => void>();
   private videos: HTMLVideoElement[] = [];
@@ -55,10 +63,14 @@ export class VideoContextProvider implements VideoContextSource {
 
   constructor(
     private document: Document,
-    adapters: readonly SiteAdapter[] = [new GenericHtml5Adapter()],
+    adapters?: readonly SiteAdapter[],
     private shadowRoot: ShadowRootReader = (element) => element.shadowRoot,
+    private captureCaptions = false,
   ) {
-    this.adapter = selectAdapter(adapters, new URL(document.location.href));
+    this.adapter = selectAdapter(
+      adapters ?? [new GenericHtml5Adapter(captureCaptions)],
+      new URL(document.location.href),
+    );
   }
 
   getSnapshot = (): VideoSnapshot => this.snapshot;
@@ -77,7 +89,15 @@ export class VideoContextProvider implements VideoContextSource {
 
   readVideo(id: string): DetectedVideo | null {
     this.refresh(true);
-    return this.report.videos.find((video) => video.id === id) ?? null;
+    const found = this.report.videos.find((video) => video.id === id);
+    const element = this.videos.find(
+      (video) => this.records.get(video)?.id === id,
+    );
+    if (!found || !element) return null;
+    const evidence = this.captions.read(element, found.context.media.id);
+    return evidence
+      ? { ...found, context: { ...found.context, captionEvidence: evidence } }
+      : found;
   }
 
   start(): void {
@@ -94,6 +114,7 @@ export class VideoContextProvider implements VideoContextSource {
   }
 
   stop(): void {
+    this.captions.clear();
     this.running = false;
     clearInterval(this.timer);
     clearTimeout(this.mutationTimer);
@@ -160,7 +181,8 @@ export class VideoContextProvider implements VideoContextSource {
   private onMediaEvent = (event: Event): void => {
     const video = event.currentTarget as HTMLVideoElement;
     if (event.type === 'play') this.lastPlayed = video;
-    const before = this.records.get(video)?.context.position.currentTimeSeconds;
+    const before =
+      this.records.get(video)?.context.rawPosition.currentTimeSeconds;
     const movedBackward =
       before !== null && before !== undefined && video.currentTime < before;
     if (
@@ -187,20 +209,26 @@ export class VideoContextProvider implements VideoContextSource {
       .filter((video) => video.isConnected)
       .map((video, index): DetectedVideo => {
         const previous = this.records.get(video);
-        const context: PlaybackContext = Object.freeze({
-          media: this.adapter.identify(video, this.document),
-          position: Object.freeze({
-            currentTimeSeconds:
-              video.readyState >= 1 &&
-              Number.isFinite(video.currentTime) &&
-              video.currentTime >= 0
-                ? video.currentTime
-                : null,
-            durationSeconds:
-              Number.isFinite(video.duration) && video.duration >= 0
-                ? video.duration
-                : null,
-          }),
+        const rawPosition = Object.freeze({
+          currentTimeSeconds:
+            video.readyState >= 1 &&
+            Number.isFinite(video.currentTime) &&
+            video.currentTime >= 0
+              ? video.currentTime
+              : null,
+          durationSeconds:
+            Number.isFinite(video.duration) && video.duration >= 0
+              ? video.duration
+              : null,
+        });
+        const observation = this.adapter.readPlayback(
+          video,
+          this.document,
+          rawPosition,
+        );
+        const resolved = holdAdPosition(previous?.context, {
+          ...observation,
+          rawPosition,
           state:
             video.readyState < 1
               ? 'loading'
@@ -212,13 +240,26 @@ export class VideoContextProvider implements VideoContextSource {
           pageTitle,
           pageUrl: sanitizePageUrl(this.document.location.href),
         });
-        const before = previous?.context.position.currentTimeSeconds;
-        const after = context.position.currentTimeSeconds;
-        const invalidated =
-          previous?.context.media.id !== context.media.id ||
-          (before !== null &&
-            before !== undefined &&
-            (after === null || after < before));
+        const baseContext: PlaybackContext = Object.freeze({
+          ...resolved,
+          media: Object.freeze({ ...resolved.media }),
+          position: Object.freeze({ ...resolved.position }),
+          timeline: Object.freeze({ ...resolved.timeline }),
+        });
+        const invalidated = conversationInvalidated(
+          previous?.context,
+          baseContext,
+        );
+        const context: PlaybackContext = this.captureCaptions
+          ? Object.freeze({
+              ...baseContext,
+              captionStatus: this.captions.observe(
+                video,
+                baseContext,
+                invalidated,
+              ),
+            })
+          : baseContext;
         const detected: DetectedVideo = Object.freeze({
           id: previous?.id ?? createId(),
           label: (
@@ -227,7 +268,12 @@ export class VideoContextProvider implements VideoContextSource {
             `Video ${index + 1}`
           ).slice(0, 80),
           context,
-          safetyRevision: (previous?.safetyRevision ?? 0) + Number(invalidated),
+          safetyRevision:
+            (previous?.safetyRevision ?? 0) +
+            Number(conversationInvalidated(previous?.context, context)),
+          requestRevision:
+            (previous?.requestRevision ?? 0) +
+            Number(requestInvalidated(previous?.context, context)),
           ...videoVisibility(video),
           pictureInPicture: isPictureInPicture(video),
           fullscreen: isComposedDescendant(
@@ -247,18 +293,15 @@ export class VideoContextProvider implements VideoContextSource {
     );
     const selected = active ? this.records.get(active) : undefined;
     const context = selected?.context ?? null;
-    const before = this.snapshot.context?.position.currentTimeSeconds;
-    const after = context?.position.currentTimeSeconds;
-    const invalidated =
-      this.snapshot.context?.media.id !== context?.media.id ||
-      (before !== null &&
-        before !== undefined &&
-        (after === null || after === undefined || after < before));
+    const invalidated = conversationInvalidated(this.snapshot.context, context);
     const next = Object.freeze({
       context,
       detectedVideoCount: videos.length,
       adapterId: this.adapter.id,
       safetyRevision: this.snapshot.safetyRevision + Number(invalidated),
+      requestRevision:
+        this.snapshot.requestRevision +
+        Number(requestInvalidated(this.snapshot.context, context)),
     });
     const report = { videos, pageTitle };
     const changed =

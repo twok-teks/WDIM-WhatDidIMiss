@@ -7,10 +7,12 @@ export function MessageList({
   messages,
   loading,
   open = true,
+  mode = 'mock',
 }: {
   messages: ChatMessage[];
   loading: boolean;
   open?: boolean;
+  mode?: 'mock' | 'grounded';
 }) {
   const scroll = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -48,7 +50,9 @@ export function MessageList({
               <span>
                 {message.role === 'user' ? 'You' : 'WDIM'}
                 {message.role === 'assistant' && (
-                  <span className="mock-label">MOCK</span>
+                  <span className="mock-label">
+                    {mode === 'mock' ? 'MOCK' : 'GROUNDED'}
+                  </span>
                 )}
               </span>
               <span>

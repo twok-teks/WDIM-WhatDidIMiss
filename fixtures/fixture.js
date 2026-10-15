@@ -1,5 +1,27 @@
 const video = document.querySelector('#main-video');
 const container = document.querySelector('#player-container');
+let demoTrack;
+document.querySelector('#caption-demo').addEventListener('click', () => {
+  if (!demoTrack) {
+    demoTrack = video.addTextTrack('captions', 'WDIM synthetic story', 'en');
+    demoTrack.addCue(
+      new VTTCue(0, 20, 'Mira holds a sealed envelope at the station.'),
+    );
+    demoTrack.addCue(
+      new VTTCue(
+        20,
+        60,
+        'Mira leaves the unopened envelope on the ticket counter.',
+      ),
+    );
+    demoTrack.addCue(
+      new VTTCue(60, 90, 'The envelope contains a map of the old station.'),
+    );
+  }
+  demoTrack.mode = 'showing';
+  video.currentTime = 0;
+  void video.play();
+});
 const status = document.querySelector('#player-status');
 const report = () => {
   status.textContent = `${video.paused ? 'Paused' : 'Playing'} · ${video.currentTime.toFixed(1)}s / ${Number.isFinite(video.duration) ? video.duration.toFixed(1) : '?'}s`;

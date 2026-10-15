@@ -70,6 +70,121 @@ describe('chat input', () => {
 });
 
 describe('widget behavior', () => {
+  it('retains safe messages across confirmed ads, cancels late replies, and resumes sending', async () => {
+    const source = contextSource();
+    const user = userEvent.setup();
+    let finish: ((value: string) => void) | undefined;
+    let pendingSignal: AbortSignal | undefined;
+    const answer = vi.fn(async (_request: ChatRequest, signal: AbortSignal) => {
+      if (answer.mock.calls.length === 2) {
+        pendingSignal = signal;
+        return new Promise<string>((resolve) => {
+          finish = resolve;
+        });
+      }
+      return 'Safe answer at 47';
+    });
+    render(
+      <App
+        source={source}
+        service={new ChatService({ answer })}
+        preferences={{ getTheme: async () => 'dark', setTheme: async () => {} }}
+      />,
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Open What did I miss?' }),
+    );
+    await user.type(screen.getByRole('textbox'), 'First{Enter}');
+    await screen.findByText('Safe answer at 47');
+    await user.type(screen.getByRole('textbox'), 'Pending{Enter}');
+    act(() =>
+      source.update({
+        ...playback(),
+        timeline: {
+          phase: 'ad',
+          mapping: 'verified',
+          continuity: 'established',
+        },
+      }),
+    );
+    expect(pendingSignal?.aborted).toBe(true);
+    expect(screen.getByText('Safe answer at 47')).toBeVisible();
+    expect(
+      screen.getByText('Ad break · Tracking paused at 0:47'),
+    ).toBeVisible();
+    await user.type(screen.getByRole('textbox'), 'Draft during ad');
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    act(() => source.update(playback(48)));
+    await act(async () => finish?.('STALE AD REPLY'));
+    expect(screen.queryByText('STALE AD REPLY')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(answer).toHaveBeenCalledTimes(3));
+    act(() => source.update(playback(12), true));
+    expect(screen.queryAllByText('Safe answer at 47')).toHaveLength(0);
+  });
+
+  it('blocks a send when a fresh owning-frame read discovers an ad', async () => {
+    const source = contextSource();
+    const answer = vi.fn(async () => 'must not run');
+    source.read = () => ({
+      ...source.getSnapshot(),
+      context: {
+        ...playback(),
+        timeline: {
+          phase: 'ad',
+          mapping: 'verified',
+          continuity: 'established',
+        },
+      },
+    });
+    render(
+      <App
+        source={source}
+        service={new ChatService({ answer })}
+        preferences={{ getTheme: async () => 'dark', setTheme: async () => {} }}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole('button', { name: 'Open What did I miss?' }),
+    );
+    await user.type(screen.getByRole('textbox'), 'Race at ad start{Enter}');
+    expect(answer).not.toHaveBeenCalled();
+  });
+
+  it('rejects a reply when only the fresh delivery read observes an ad', async () => {
+    const source = contextSource();
+    const answer = vi.fn(async () => {
+      source.read = () => ({
+        ...source.getSnapshot(),
+        context: {
+          ...playback(),
+          timeline: {
+            phase: 'ad',
+            mapping: 'verified',
+            continuity: 'established',
+          },
+        },
+      });
+      return 'DELIVERY DURING AD';
+    });
+    render(
+      <App
+        source={source}
+        service={new ChatService({ answer })}
+        preferences={{ getTheme: async () => 'dark', setTheme: async () => {} }}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole('button', { name: 'Open What did I miss?' }),
+    );
+    await user.type(screen.getByRole('textbox'), 'Delivery race{Enter}');
+    await waitFor(() => expect(answer).toHaveBeenCalledOnce());
+    expect(screen.queryByText('DELIVERY DURING AD')).not.toBeInTheDocument();
+  });
+
   it('shows context, sends a fresh snapshot, minimizes without clearing, and closes with clearing', async () => {
     const { user, source, answer } = setup();
     await user.click(

@@ -1,6 +1,8 @@
 import { createId } from '../services/id';
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
+import { installAiGateway } from '../services/chat/background-ai-gateway';
+import { AI_PORT } from '../services/chat/browser-grounded-transport';
 import {
   MediaRegistry,
   type FrameOwner,
@@ -17,6 +19,7 @@ import {
 type Port = ReturnType<typeof browser.runtime.connect>;
 
 export default defineBackground(() => {
+  installAiGateway(import.meta.env.WDIM_AI_MODE === 'groq');
   const registry = new MediaRegistry();
   const connections = new Map<
     string,
@@ -64,6 +67,7 @@ export default defineBackground(() => {
   };
 
   browser.runtime.onConnect.addListener((port) => {
+    if (port.name === AI_PORT) return;
     const sender = port.sender;
     if (
       (port.name !== MEDIA_PORT && port.name !== UI_PORT) ||
@@ -164,6 +168,11 @@ export default defineBackground(() => {
             type: 'read-result',
             requestId: request.requestId,
             ...catalog(requester.owner),
+            ...(message.evidence?.mediaId ===
+            message.report.videos.find((video) => video.id === request.videoId)
+              ?.context.media.id
+              ? { evidence: message.evidence }
+              : {}),
             ...(!message.report.videos.some(
               (video) => video.id === request.videoId,
             )

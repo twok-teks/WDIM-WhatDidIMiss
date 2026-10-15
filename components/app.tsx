@@ -44,6 +44,7 @@ export function App({
         onClose={() => {
           minimize();
           setConversation((value) => value + 1);
+          source.releaseSelection?.();
         }}
         debug={debug}
       />

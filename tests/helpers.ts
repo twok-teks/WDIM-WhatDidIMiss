@@ -1,4 +1,5 @@
 import type { PlaybackContext } from '../domain/media/types';
+import { requestInvalidated } from '../domain/spoilers/playback';
 import type {
   VideoContextSource,
   VideoSnapshot,
@@ -8,6 +9,12 @@ export function playback(seconds: number | null = 47): PlaybackContext {
   return {
     media: { id: 'movie-3', title: 'Test page', confidence: 'unverified' },
     position: { currentTimeSeconds: seconds, durationSeconds: 90 },
+    rawPosition: { currentTimeSeconds: seconds, durationSeconds: 90 },
+    timeline: {
+      phase: 'content',
+      mapping: 'verified',
+      continuity: 'established',
+    },
     state: seconds === null ? 'loading' : 'paused',
     pageTitle: 'Test page',
     pageUrl: 'http://localhost/',
@@ -20,6 +27,7 @@ export function contextSource(context: PlaybackContext | null = playback()) {
     detectedVideoCount: context ? 1 : 0,
     adapterId: 'generic-html5',
     safetyRevision: 1,
+    requestRevision: 1,
   };
   const listeners = new Set<() => void>();
   const source: VideoContextSource & {
@@ -36,6 +44,9 @@ export function contextSource(context: PlaybackContext | null = playback()) {
         ...snapshot,
         context: next,
         safetyRevision: snapshot.safetyRevision + Number(invalidate),
+        requestRevision:
+          snapshot.requestRevision +
+          Number(invalidate || requestInvalidated(snapshot.context, next)),
       };
       listeners.forEach((listener) => listener());
     },

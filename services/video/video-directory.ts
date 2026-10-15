@@ -3,11 +3,17 @@ import {
   type ListedVideo,
   type VideoSnapshot,
 } from './video-types';
+import {
+  conversationInvalidated,
+  requestInvalidated,
+} from '../../domain/spoilers/playback';
 
 export class VideoDirectory {
   private videos: readonly ListedVideo[] = [];
   private tabId = -1;
   private pinned: string | null = null;
+  private held: string | null = null;
+  private requestSignature = '';
   private signature = '';
   private version = -1;
   private failed?: { id: string; frameVersion: number; message: string };
@@ -16,6 +22,7 @@ export class VideoDirectory {
     detectedVideoCount: 0,
     adapterId: 'generic-html5',
     safetyRevision: 0,
+    requestRevision: 0,
     videos: [],
     selectedVideoId: null,
     selectionMode: 'auto',
@@ -34,7 +41,18 @@ export class VideoDirectory {
 
   select(id: string | null): void {
     this.pinned = id;
+    this.held = null;
     this.failed = undefined;
+    this.recompute();
+  }
+
+  holdSelection(): void {
+    this.held = this.snapshot.selectedVideoId ?? null;
+    this.recompute();
+  }
+
+  releaseSelection(): void {
+    this.held = null;
     this.recompute();
   }
 
@@ -56,6 +74,7 @@ export class VideoDirectory {
       videos: [],
       detectedVideoCount: 0,
       safetyRevision: this.snapshot.safetyRevision + 1,
+      requestRevision: this.snapshot.requestRevision + 1,
       discoveryStatus: 'connecting',
       discoveryNotice: 'Reconnecting to video discovery…',
     };
@@ -76,6 +95,7 @@ export class VideoDirectory {
       ...this.snapshot,
       context: null,
       safetyRevision: this.snapshot.safetyRevision + 1,
+      requestRevision: this.snapshot.requestRevision + 1,
       discoveryStatus: 'error',
       discoveryNotice: message,
     };
@@ -83,12 +103,14 @@ export class VideoDirectory {
 
   private recompute(): void {
     // Automatic selection is local to this tab. Other tabs require an explicit choice.
-    const selected = this.pinned
-      ? this.videos.find((video) => video.id === this.pinned)
+    const target = this.pinned ?? this.held;
+    const selected = target
+      ? this.videos.find((video) => video.id === target)
       : this.videos
           .filter(
             (video) =>
               video.tabId === this.tabId &&
+              video.context.timeline.phase !== 'ad' &&
               (video.visible ||
                 video.pictureInPicture ||
                 video.context.state === 'playing'),
@@ -106,22 +128,31 @@ export class VideoDirectory {
     const signature = current
       ? `${current.id}:${current.context.media.id}:${current.safetyRevision}`
       : '';
-    const before = this.snapshot.context?.position.currentTimeSeconds;
-    const after = current?.context.position.currentTimeSeconds;
     const invalidated =
       signature !== this.signature ||
-      (before !== null &&
-        before !== undefined &&
-        (after === null || after === undefined || after < before));
+      conversationInvalidated(this.snapshot.context, current?.context ?? null);
+    const requestSignature = current
+      ? `${current.id}:${current.requestRevision}`
+      : '';
+    const cancelRequest =
+      invalidated ||
+      requestSignature !== this.requestSignature ||
+      requestInvalidated(this.snapshot.context, current?.context ?? null);
     this.signature = signature;
+    this.requestSignature = requestSignature;
     this.snapshot = Object.freeze({
       context: current?.context ?? null,
       detectedVideoCount: this.videos.length,
       adapterId: 'generic-html5',
       safetyRevision: this.snapshot.safetyRevision + Number(invalidated),
+      requestRevision: this.snapshot.requestRevision + Number(cancelRequest),
       videos: this.videos,
-      selectedVideoId: this.pinned ?? selected?.id ?? null,
-      selectionMode: this.pinned ? 'manual' : 'auto',
+      selectedVideoId: target ?? selected?.id ?? null,
+      selectionMode: this.pinned
+        ? 'manual'
+        : this.held
+          ? 'conversation'
+          : 'auto',
       discoveryStatus:
         this.snapshot.discoveryStatus === 'refreshing'
           ? 'refreshing'
@@ -130,7 +161,7 @@ export class VideoDirectory {
             : 'ready',
       discoveryNotice:
         failed?.message ??
-        (this.pinned && !selected
+        (target && !selected
           ? 'Selected video is unavailable. Refresh or choose another video.'
           : undefined),
       currentTabId: this.tabId,

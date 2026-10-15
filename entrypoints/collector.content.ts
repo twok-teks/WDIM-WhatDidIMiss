@@ -11,7 +11,12 @@ export default defineContentScript({
   runAt: 'document_idle',
   main(ctx) {
     const source = new BrowserVideoSource(
-      new VideoContextProvider(document, undefined, extensionShadowRoot),
+      new VideoContextProvider(
+        document,
+        undefined,
+        extensionShadowRoot,
+        import.meta.env.WDIM_AI_MODE === 'groq',
+      ),
     );
     source.start();
     ctx.onInvalidated(() => source.stop());

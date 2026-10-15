@@ -23,6 +23,7 @@ function candidate(id = 'first', tabId = 1, time = 47): ListedVideo {
     label: id,
     context: { ...playback(time), media: { ...playback().media, id } },
     safetyRevision: 1,
+    requestRevision: 1,
     visible: true,
     area: 10000,
     pictureInPicture: false,
@@ -157,6 +158,36 @@ describe('cross-tab registry', () => {
 });
 
 describe('video selection and stale context', () => {
+  it('holds the conversation player when another video plays, including removal, until explicitly released', () => {
+    const directory = new VideoDirectory();
+    const original = candidate();
+    const other = {
+      ...candidate('other'),
+      context: { ...playback(), state: 'playing' as const },
+    };
+    directory.update(1, 1, [original]);
+    directory.holdSelection();
+    directory.update(2, 1, [original, other]);
+    expect(directory.getSnapshot().selectedVideoId).toBe('first');
+    expect(directory.getSnapshot().selectionMode).toBe('conversation');
+    directory.update(3, 1, [other]);
+    expect(directory.getSnapshot().selectedVideoId).toBe('first');
+    expect(directory.getSnapshot().context).toBeNull();
+    directory.releaseSelection();
+    expect(directory.getSnapshot().selectedVideoId).toBe('other');
+  });
+
+  it('preserves cancellation across a fast ad break whose final content position is unchanged', () => {
+    const directory = new VideoDirectory();
+    directory.update(1, 1, [candidate()]);
+    const before = directory.getSnapshot();
+    directory.update(2, 1, [{ ...candidate(), requestRevision: 3 }]);
+    expect(directory.getSnapshot().safetyRevision).toBe(before.safetyRevision);
+    expect(directory.getSnapshot().requestRevision).toBeGreaterThan(
+      before.requestRevision,
+    );
+  });
+
   it('limits auto to the current tab; explicit other-tab selection survives another player starting', () => {
     const directory = new VideoDirectory();
     const local = candidate();

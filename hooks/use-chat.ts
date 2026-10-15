@@ -7,6 +7,8 @@ import {
 } from '../domain/spoilers/boundary';
 import type { ChatService } from '../services/chat/chat-service';
 import type { VideoContextSource } from '../services/video/video-context-provider';
+import { canAsk } from '../domain/spoilers/playback';
+import type { ContextOptions } from '../domain/spoilers/captions';
 
 export interface ChatMessage {
   id: string;
@@ -19,16 +21,41 @@ export function useChat(
   source: VideoContextSource,
   service: ChatService,
   revision: number,
+  contextOptions: ContextOptions = { background: false, earlierWorks: false },
 ) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = useRef<AbortController | null>(null);
-  useEffect(() => () => pending.current?.abort(), []);
+  useEffect(() => {
+    let requestRevision = source.getSnapshot().requestRevision;
+    const unsubscribe = source.subscribe(() => {
+      const next = source.getSnapshot();
+      if (next.requestRevision !== requestRevision || !canAsk(next.context)) {
+        pending.current?.abort();
+        pending.current = null;
+        setLoading(false);
+        setError(null);
+      }
+      requestRevision = next.requestRevision;
+    });
+    return () => {
+      unsubscribe();
+      pending.current?.abort();
+      pending.current = null;
+    };
+  }, [source]);
 
   const send = (question: string): boolean => {
-    if (pending.current || !question.trim() || question.trim().length > 2000)
+    if (
+      pending.current ||
+      !question.trim() ||
+      question.trim().length > 2000 ||
+      !canAsk(source.getSnapshot().context)
+    )
       return false;
+    source.holdSelection?.();
+    const requestRevision = source.getSnapshot().requestRevision;
     const controller = new AbortController();
     pending.current = controller;
     setLoading(true);
@@ -36,12 +63,13 @@ export function useChat(
     void (async () => {
       // Embedded and other-tab players must be queried in their owning frame.
       const snapshot = await source.read();
-      if (controller.signal.aborted || snapshot.safetyRevision !== revision)
-        return;
       if (
-        !snapshot.context ||
-        snapshot.context.position.currentTimeSeconds === null
-      ) {
+        controller.signal.aborted ||
+        snapshot.safetyRevision !== revision ||
+        snapshot.requestRevision !== requestRevision
+      )
+        return;
+      if (!snapshot.context || !canAsk(snapshot.context)) {
         throw new Error('Playback position unavailable.');
       }
       const boundary = createSpoilerBoundary(snapshot.context);
@@ -58,11 +86,14 @@ export function useChat(
         question,
         snapshot.context,
         controller.signal,
+        contextOptions,
       );
       const latest = await source.read();
       if (
         !controller.signal.aborted &&
         latest.safetyRevision === revision &&
+        latest.requestRevision === requestRevision &&
+        canAsk(latest.context) &&
         boundaryStillAllowed(answer.boundary, latest.context)
       ) {
         setMessages((previous) => [
@@ -82,12 +113,14 @@ export function useChat(
           source.getSnapshot().safetyRevision === revision
         ) {
           setError(
-            'The local mock could not reply. Check the selected video, refresh videos, and send your question again.',
+            service.mode === 'mock'
+              ? 'The local mock could not reply. Check the selected video, refresh videos, and send your question again.'
+              : 'A verified answer is unavailable. Check the AI gateway and selected video, then try again.',
           );
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted) {
+        if (pending.current === controller) {
           pending.current = null;
           setLoading(false);
         }

@@ -129,6 +129,83 @@ async function inputQuestion(panel: ReturnType<Page['getByRole']>) {
   await panel.getByRole('textbox').fill('Question without video');
 }
 
+test('a separate playing ad-like video cannot take over an active conversation', async () => {
+  const panel = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Seek to 0:47' }).click();
+  await expect(panel.getByLabel('Playback position')).toHaveText('0:47 / 1:30');
+  await panel.getByRole('textbox').fill('Keep this player');
+  await panel.getByRole('button', { name: 'Send message' }).click();
+  await expect(
+    panel.getByText(/Your question reached the local mock at 0:47/),
+  ).toBeVisible();
+  const picker = panel.getByRole('combobox', { name: 'Video source' });
+  const selected = await picker.inputValue();
+  expect(selected).not.toBe('auto');
+  await page.evaluate(async () => {
+    const original = document.querySelector<HTMLVideoElement>('#main-video')!;
+    const second = document.createElement('video');
+    second.id = 'ad-like-video';
+    second.src = original.currentSrc;
+    second.muted = true;
+    second.setAttribute('aria-label', 'Separate ad-like player');
+    document.body.append(second);
+    await second.play();
+  });
+  await panel.getByRole('button', { name: 'Refresh videos' }).click();
+  await expect(
+    picker.locator('option', { hasText: 'Separate ad-like player' }),
+  ).toHaveCount(1);
+  await expect(picker).toHaveValue(selected);
+  await expect(panel.getByLabel('Playback position')).toHaveText('0:47 / 1:30');
+  await expect(panel.getByText('Kept for this conversation')).toBeVisible();
+  await page.locator('#main-video').evaluate((video) => video.remove());
+  await expect(panel.getByText('No active video detected')).toBeVisible();
+  await expect(
+    panel.getByText(/Your question reached the local mock/),
+  ).toHaveCount(0);
+  await expect(picker).toHaveValue(selected);
+  await picker.selectOption('auto');
+  await expect(panel.getByText('Playing', { exact: true })).toBeVisible();
+});
+
+test('unexplained timeline changes suspend tracking without interrupting playback', async () => {
+  const panel = page.getByRole('dialog');
+  await page.getByRole('button', { name: 'Seek to 0:47' }).click();
+  await expect(panel.getByLabel('Playback position')).toHaveText('0:47 / 1:30');
+  await panel.getByRole('textbox').fill('Before transition');
+  await panel.getByRole('button', { name: 'Send message' }).click();
+  await expect(
+    panel.getByText(/Your question reached the local mock/),
+  ).toBeVisible();
+  // A generated live stream changes the actual media duration while retaining the
+  // element's source attribute. Page-world property overrides cannot affect the
+  // extension's isolated-world DOM wrappers.
+  await page
+    .locator('#main-video')
+    .evaluate(async (video: HTMLVideoElement) => {
+      const canvas = document.createElement('canvas');
+      canvas.getContext('2d')!.fillRect(0, 0, 300, 150);
+      video.srcObject = canvas.captureStream(10);
+      video.muted = true;
+      await video.play();
+    });
+  await expect(
+    panel.getByText('Tracking unavailable · Timeline uncertain'),
+  ).toBeVisible();
+  await expect(
+    panel.getByText(/Your question reached the local mock/),
+  ).toHaveCount(0);
+  await panel.getByRole('textbox').fill('Blocked');
+  await expect(
+    panel.getByRole('button', { name: 'Send message' }),
+  ).toBeDisabled();
+  await expect(page.locator('#main-video')).toHaveJSProperty('paused', false);
+  await panel.getByRole('button', { name: 'Refresh videos' }).click();
+  await expect(
+    panel.getByRole('button', { name: 'Send message' }),
+  ).toBeDisabled();
+});
+
 test('container fullscreen preserves the widget and returns it to the page', async () => {
   await page.getByRole('button', { name: 'Container fullscreen' }).click();
   await expect

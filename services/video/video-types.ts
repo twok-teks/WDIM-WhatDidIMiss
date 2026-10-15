@@ -5,6 +5,7 @@ export interface DetectedVideo {
   readonly label: string;
   readonly context: PlaybackContext;
   readonly safetyRevision: number;
+  readonly requestRevision: number;
   readonly visible: boolean;
   readonly area: number;
   readonly pictureInPicture: boolean;
@@ -29,9 +30,10 @@ export interface VideoSnapshot {
   readonly detectedVideoCount: number;
   readonly adapterId: string;
   readonly safetyRevision: number;
+  readonly requestRevision: number;
   readonly videos?: readonly ListedVideo[];
   readonly selectedVideoId?: string | null;
-  readonly selectionMode?: 'auto' | 'manual';
+  readonly selectionMode?: 'auto' | 'manual' | 'conversation';
   readonly discoveryStatus?: 'connecting' | 'ready' | 'refreshing' | 'error';
   readonly discoveryNotice?: string;
   readonly currentTabId?: number;
@@ -44,6 +46,8 @@ export interface VideoContextSource {
   rescan?(): Promise<void>;
   selectVideo?(id: string | null): void;
   activate?(): void;
+  holdSelection?(): void;
+  releaseSelection?(): void;
 }
 
 export function compareVideos(a: DetectedVideo, b: DetectedVideo): number {

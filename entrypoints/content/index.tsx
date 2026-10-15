@@ -5,6 +5,8 @@ import { createShadowRootUi } from 'wxt/utils/content-script-ui/shadow-root';
 import { App } from '../../components/app';
 import { ChatService } from '../../services/chat/chat-service';
 import { MockAIProvider } from '../../services/chat/mock-ai-provider';
+import { GroundedAIProvider } from '../../services/chat/grounded-ai-provider';
+import { BrowserGroundedTransport } from '../../services/chat/browser-grounded-transport';
 import { BrowserVideoSource } from '../../services/video/browser-video-source';
 import { createPreferenceStorage } from '../../storage/preferences';
 import '../../styles/widget.css';
@@ -23,7 +25,12 @@ export default defineContentScript({
       if (event.persisted) source.start();
     });
     const mockOptions = { failNext: false };
-    const service = new ChatService(new MockAIProvider(mockOptions));
+    const aiEnabled = import.meta.env.WDIM_AI_MODE === 'groq';
+    const service = new ChatService(
+      aiEnabled
+        ? new GroundedAIProvider(new BrowserGroundedTransport())
+        : new MockAIProvider(mockOptions),
+    );
     const preferences = createPreferenceStorage(browser.storage.local);
     const ui = await createShadowRootUi(ctx, {
       name: 'wdim-companion',
@@ -47,7 +54,7 @@ export default defineContentScript({
             service={service}
             preferences={preferences}
             debug={
-              import.meta.env.DEV
+              import.meta.env.DEV && !aiEnabled
                 ? {
                     failNext: () => {
                       mockOptions.failNext = true;

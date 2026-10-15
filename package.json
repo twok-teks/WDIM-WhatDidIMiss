@@ -5,7 +5,7 @@
   "type": "module",
   "description": "A local, spoiler-bounded video companion browser extension.",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -14,6 +14,9 @@
     "fixture": "node scripts/fixture-server.mjs",
     "build": "wxt build -b chrome --mv3",
     "build:firefox": "wxt build -b firefox --mv3",
+    "build:ai": "node scripts/build-ai.mjs",
+    "build:ai:firefox": "node scripts/build-ai.mjs --firefox",
+    "ai:server": "tsx --env-file-if-exists=server/.env server/index.ts",
     "postinstall": "wxt prepare",
     "typecheck": "wxt prepare && tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
@@ -22,6 +25,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
+    "test:e2e:ai": "node scripts/test-ai.mjs",
+    "test:e2e:ai:live": "node scripts/test-ai.mjs --live",
     "browser:install": "playwright install chromium --no-shell",
     "check": "npm run lint && npm run typecheck && npm test && npm run format:check && npm run build && npm run build:firefox"
   },
@@ -44,6 +49,7 @@
     "globals": "^17.12.0",
     "jsdom": "^27.4.0",
     "prettier": "^3.9.7",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.0",
     "vitest": "^4.1.11",

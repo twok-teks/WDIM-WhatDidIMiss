@@ -20,8 +20,10 @@ export function VideoPicker({
         Number(a === snapshot.currentTabId) || a - b,
   );
   const manual = snapshot.selectionMode === 'manual';
+  const held = snapshot.selectionMode === 'conversation';
   const unavailable =
-    manual && !videos.some((video) => video.id === snapshot.selectedVideoId);
+    (manual || held) &&
+    !videos.some((video) => video.id === snapshot.selectedVideoId);
   return (
     <>
       <div className="video-picker">
@@ -29,7 +31,7 @@ export function VideoPicker({
         <select
           id="wdim-video-source"
           aria-label="Video source"
-          value={manual ? (snapshot.selectedVideoId ?? '') : 'auto'}
+          value={manual || held ? (snapshot.selectedVideoId ?? '') : 'auto'}
           onChange={(event) =>
             source.selectVideo?.(
               event.target.value === 'auto' ? null : event.target.value,
@@ -83,7 +85,13 @@ export function VideoPicker({
             ? 'Refreshing videos…'
             : `${videos.length} video${videos.length === 1 ? '' : 's'} · ${groups.length} tab${groups.length === 1 ? '' : 's'}`}
         </span>
-        <span>{manual ? 'Selected manually' : 'Auto · current tab'}</span>
+        <span>
+          {manual
+            ? 'Selected manually'
+            : held
+              ? 'Kept for this conversation'
+              : 'Auto · current tab'}
+        </span>
       </div>
       {snapshot.discoveryNotice && (
         <p className="discovery-notice" role="status">

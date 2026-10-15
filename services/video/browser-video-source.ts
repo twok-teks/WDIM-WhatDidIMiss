@@ -82,6 +82,16 @@ export class BrowserVideoSource implements VideoContextSource {
     if (this.getSnapshot().context) void this.read().catch(() => {});
   };
 
+  holdSelection = (): void => {
+    this.directory.holdSelection();
+    this.emit();
+  };
+
+  releaseSelection = (): void => {
+    this.directory.releaseSelection();
+    this.emit();
+  };
+
   read = async (): Promise<VideoSnapshot> => {
     const videoId = this.getSnapshot().selectedVideoId;
     if (!videoId) return this.getSnapshot();
@@ -95,7 +105,20 @@ export class BrowserVideoSource implements VideoContextSource {
       if (result.type !== 'read-result')
         throw new Error('Unexpected video response.');
       if (result.error) throw new Error(result.error);
-      return this.getSnapshot();
+      const fresh = this.getSnapshot();
+      if (
+        fresh.selectedVideoId !== videoId ||
+        fresh.safetyRevision !== selection
+      )
+        throw new Error('Selection changed.');
+      return result.evidence &&
+        fresh.context &&
+        result.evidence.mediaId === fresh.context.media.id
+        ? {
+            ...fresh,
+            context: { ...fresh.context, captionEvidence: result.evidence },
+          }
+        : fresh;
     } catch (error) {
       if (selection === this.getSnapshot().safetyRevision) {
         this.directory.unavailable(
@@ -212,11 +235,14 @@ export class BrowserVideoSource implements VideoContextSource {
       this.emit();
     }
     if (message.type === 'read' && this.local) {
-      this.local.readVideo(message.videoId);
+      const selected = this.local.readVideo(message.videoId);
       this.post({
         type: 'read-result',
         requestId: message.requestId,
         report: this.local.getReport(),
+        ...(selected?.context.captionEvidence
+          ? { evidence: selected.context.captionEvidence }
+          : {}),
       });
     } else if (message.type === 'rescan' && this.local) {
       void this.local.rescan().then(() => this.publish());

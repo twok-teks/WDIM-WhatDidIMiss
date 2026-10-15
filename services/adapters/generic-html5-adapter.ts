@@ -1,9 +1,65 @@
 import { createId } from '../id';
-import type { MediaIdentity } from '../../domain/media/types';
-import type { SiteAdapter } from './site-adapter';
+import type { MediaIdentity, PlaybackPosition } from '../../domain/media/types';
+import type { SiteAdapter, PlaybackObservation } from './site-adapter';
 
 export class GenericHtml5Adapter implements SiteAdapter {
+  constructor(private observedCaptionClock = false) {}
   readonly id = 'generic-html5';
+  private timelines = new WeakMap<
+    HTMLVideoElement,
+    { id: string; duration: number | null; uncertain: boolean }
+  >();
+
+  readPlayback(
+    video: HTMLVideoElement,
+    document: Document,
+    raw: PlaybackPosition,
+  ): PlaybackObservation {
+    const media = this.identify(video, document);
+    const previous = this.timelines.get(video);
+    const same = previous?.id === media.id;
+    // A duration change can be an ad, live timeline, or replacement. Never guess.
+    const changed =
+      same &&
+      previous.duration !== null &&
+      raw.durationSeconds !== previous.duration;
+    // Caption-only AI never retrieves a full story by this clock. A duration
+    // discontinuity can start a NEW unverified session once raw timing is known;
+    // it cannot revive old captions, identity, conversations, or verified mapping.
+    if (
+      this.observedCaptionClock &&
+      same &&
+      (changed || previous.uncertain) &&
+      raw.currentTimeSeconds !== null &&
+      raw.durationSeconds !== null &&
+      raw.durationSeconds > 0 &&
+      raw.currentTimeSeconds <= raw.durationSeconds
+    ) {
+      this.identities.delete(video);
+      this.timelines.delete(video);
+      return this.readPlayback(video, document, raw);
+    }
+    const uncertain = (same && previous.uncertain) || changed;
+    this.timelines.set(video, {
+      id: media.id,
+      duration: raw.durationSeconds,
+      uncertain,
+    });
+    const available = raw.currentTimeSeconds !== null && !uncertain;
+    return {
+      media,
+      position: available
+        ? raw
+        : { currentTimeSeconds: null, durationSeconds: null },
+      timeline: available
+        ? {
+            phase: 'unclassified',
+            mapping: 'unverified',
+            continuity: 'established',
+          }
+        : { phase: 'unknown', mapping: 'unavailable', continuity: 'unknown' },
+    };
+  }
   private identities = new WeakMap<
     HTMLVideoElement,
     { key: string; id: string }

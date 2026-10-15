@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "mediaId": "wdim-synthetic-story-v1",
+      "durationSeconds": 90,
+      "facts": [
+        {
+          "mediaId": "wdim-synthetic-story-v1",
+          "revealedAtSeconds": 10,
+          "text": "Mira enters the station carrying a sealed envelope."
+        },
+        {
+          "mediaId": "wdim-synthetic-story-v1",
+          "revealedAtSeconds": 40,
+          "text": "Mira places the unopened envelope on the ticket counter."
+        },
+        {
+          "mediaId": "wdim-synthetic-story-v1",
+          "revealedAtSeconds": 75,
+          "text": "The envelope contains a map of the old station."
+        }
+      ]
+    }
+  ]
+}
