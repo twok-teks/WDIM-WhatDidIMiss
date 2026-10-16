@@ -26,6 +26,8 @@ flowchart TD
 
 ## Extension shell
 
+The compact chat panel keeps the selected page title and playback status visible. A collapsed **Details** disclosure contains video selection, refresh, caption coverage, and related-context permissions. Its expanded body scrolls independently with a height cap so it cannot consume the conversation area. Missing-caption guidance and connection/tracking failures remain visible outside the disclosure; collapsing details never changes selection, permissions, or spoiler checks.
+
 `entrypoints/content/index.tsx` is the composition root. WXT generates the manifest from it and `wxt.config.ts`. It injects in the top frame of HTTP(S) documents after document idle. It runs in the extension's isolated JavaScript world, sharing the page DOM but not page JavaScript globals.
 
 `entrypoints/collector.content.ts` separately injects a lightweight collector into every eligible frame, including cross-origin embeds. It uses `allFrames`, `matchAboutBlank`, and `matchOriginAsFallback` for browser-authorized related about/srcdoc/blob/data frames. The React bundle only runs in the top frame. No popup, options page, or backend is needed.

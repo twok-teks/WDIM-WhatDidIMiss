@@ -158,6 +158,10 @@ The mock has no story knowledge. AI tests establish evidence exclusion, constrai
 
 ## AI integration validation
 
+The compact-layout browser test checks that the collapsed desktop panel gives over 60% of its height to the conversation, that Details opens with the keyboard, and that the composer and conversation remain usable with Details expanded at 375 × 500. Discovery tests open Details before selecting or refreshing videos. Review `widget-minimal-chat.png` and `widget-minimal-narrow.png` in `test-results/` after the browser suite.
+
+The compact redesign passed the full check (146 unit/component/server tests and both default browser builds), 14 standard Chromium browser tests, and the AI UI test with a fake model. Both AI browser builds passed. Desktop, narrow-screen, and caption-answer screenshots were inspected. The UI-only redesign did not repeat the live Groq calls.
+
 Run `npm run test:e2e:ai` with a fake model. It checks missing-evidence refusal, the verified-catalog contract over an actual extension port, and the real caption demo through the UI. The positive caption path covers observation, fresh selected-frame reads, transport, gateway filtering, model selection, and rendering. A rewind removes the answer. No production verification bypass is installed. `test-results/widget-caption-ai.png` is a review artifact.
 
 With a Groq key, `npm run test:e2e:ai:live` repeats with the real model and future-event refusals on both paths: four potentially billable requests containing synthetic evidence only. It validates the fixture's fictional captions, not visual interpretation or real streaming titles. Stop any gateway on port 8787 first. Vendor availability/refusal behavior can change; domain checks remain mandatory.

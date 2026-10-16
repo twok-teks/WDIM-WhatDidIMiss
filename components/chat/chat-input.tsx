@@ -24,6 +24,7 @@ export function ChatInput({
     >
       <textarea
         aria-label="Ask about what you've watched"
+        aria-describedby="wdim-composer-help"
         placeholder="What did you miss?"
         value={draft}
         rows={2}
@@ -42,7 +43,7 @@ export function ChatInput({
         }}
       />
       <div className="composer-bottom">
-        <span>
+        <span id="wdim-composer-help">
           Enter to send <span aria-hidden="true">·</span> Shift + Enter for a
           new line
         </span>
@@ -50,7 +51,7 @@ export function ChatInput({
           type="submit"
           className="send-button"
           aria-label="Send message"
-          title="Send message"
+          title="Send message (Enter). Shift + Enter for a new line."
           disabled={!canSend || loading || !draft.trim()}
         >
           <Icon name="send" size={17} />

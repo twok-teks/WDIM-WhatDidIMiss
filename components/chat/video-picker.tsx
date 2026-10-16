@@ -93,11 +93,13 @@ export function VideoPicker({
               : 'Auto · current tab'}
         </span>
       </div>
-      {snapshot.discoveryNotice && (
-        <p className="discovery-notice" role="status">
-          {snapshot.discoveryNotice}
-        </p>
-      )}
+      {snapshot.discoveryNotice &&
+        snapshot.discoveryStatus === 'ready' &&
+        snapshot.context && (
+          <p className="discovery-notice" role="status">
+            {snapshot.discoveryNotice}
+          </p>
+        )}
     </>
   );
 }

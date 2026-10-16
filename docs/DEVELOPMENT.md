@@ -171,6 +171,8 @@ Developer context includes raw time, effective position, timeline phase/mapping/
 
 ## Command reference
 
+The chat panel opens with **Details** collapsed. Expand it to change video source, refresh discovery, inspect caption coverage, or open **Related context**. The disclosure supports keyboard activation and scrolls internally on smaller screens. Playback time and actionable tracking problems stay visible while chatting.
+
 For the opt-in AI build, use `npm run build:ai` or `npm run build:ai:firefox`; run the gateway with `npm run ai:server`. `npm run test:e2e:ai` uses a fake model; `npm run test:e2e:ai:live` makes four potentially billable Groq requests with synthetic evidence, including actual caption-to-chat UI requests. Both rebuild Chrome AI output. Default builds overwrite the same directories with mock mode.
 
 On the fixture, click **Enable caption demo**, play briefly, then ask **What is Mira holding?** On external sites, enable captions and check the excerpt count. A persistent zero count means that caption surface is unavailable; do not disable boundary validation. Use a normally launched browser with the unpacked build for interactive YouTube testing: the automated Playwright session produced playback errors on the reported machine, while a native Brave launch worked.

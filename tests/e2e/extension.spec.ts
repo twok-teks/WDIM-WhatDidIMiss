@@ -129,6 +129,37 @@ async function inputQuestion(panel: ReturnType<Page['getByRole']>) {
   await panel.getByRole('textbox').fill('Question without video');
 }
 
+test('compact panel keeps chat readable and details keyboard accessible on small screens', async () => {
+  const panel = page.getByRole('dialog');
+  const details = page.getByLabel('Video details', { exact: true });
+  await expect(panel.getByRole('combobox')).toBeHidden();
+  await panel.getByRole('textbox').fill('What happened so far?');
+  await panel.getByRole('button', { name: 'Send message' }).click();
+  await expect(
+    panel.getByText(/Your question reached the local mock/),
+  ).toBeVisible();
+  const conversation = panel.getByRole('log');
+  const panelBox = (await panel.boundingBox())!;
+  const chatBox = (await conversation.boundingBox())!;
+  expect(chatBox.height).toBeGreaterThan(panelBox.height * 0.6);
+  await page.screenshot({ path: 'test-results/widget-minimal-chat.png' });
+  await details.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('combobox')).toBeVisible();
+  await expect(panel.getByRole('textbox')).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 500 });
+  const composer = (await panel.getByRole('textbox').boundingBox())!;
+  expect(composer.y + composer.height).toBeLessThan(500);
+  expect((await conversation.boundingBox())!.height).toBeGreaterThan(90);
+  await details.focus();
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('combobox')).toBeHidden();
+  await expect(
+    panel.getByText(/Your question reached the local mock/),
+  ).toBeVisible();
+  await page.screenshot({ path: 'test-results/widget-minimal-narrow.png' });
+});
+
 test('a separate playing ad-like video cannot take over an active conversation', async () => {
   const panel = page.getByRole('dialog');
   await page.getByRole('button', { name: 'Seek to 0:47' }).click();
@@ -138,6 +169,7 @@ test('a separate playing ad-like video cannot take over an active conversation',
   await expect(
     panel.getByText(/Your question reached the local mock at 0:47/),
   ).toBeVisible();
+  await openVideoDetails();
   const picker = panel.getByRole('combobox', { name: 'Video source' });
   const selected = await picker.inputValue();
   expect(selected).not.toBe('auto');
@@ -151,6 +183,7 @@ test('a separate playing ad-like video cannot take over an active conversation',
     document.body.append(second);
     await second.play();
   });
+  await openVideoDetails();
   await panel.getByRole('button', { name: 'Refresh videos' }).click();
   await expect(
     picker.locator('option', { hasText: 'Separate ad-like player' }),
@@ -200,6 +233,7 @@ test('unexplained timeline changes suspend tracking without interrupting playbac
     panel.getByRole('button', { name: 'Send message' }),
   ).toBeDisabled();
   await expect(page.locator('#main-video')).toHaveJSProperty('paused', false);
+  await openVideoDetails();
   await panel.getByRole('button', { name: 'Refresh videos' }).click();
   await expect(
     panel.getByRole('button', { name: 'Send message' }),
@@ -239,6 +273,7 @@ test('discovers cross-origin embedded players and reads their selected timestamp
   const embedded = page.frameLocator('iframe');
   await expect(embedded.locator('video')).toHaveJSProperty('duration', 90);
   await page.getByRole('button', { name: 'Open What did I miss?' }).click();
+  await openVideoDetails();
   const picker = page.getByRole('combobox', { name: 'Video source' });
   const option = picker
     .locator('option')
@@ -275,7 +310,9 @@ test('discovers open/closed shadow trees, srcdoc, hidden playing video and manua
   await page.getByRole('button', { name: 'Add srcdoc player' }).click();
   await page.getByRole('button', { name: 'Add hidden playing video' }).click();
   await page.getByRole('button', { name: 'Open What did I miss?' }).click();
+  await openVideoDetails();
   await page.getByRole('button', { name: 'Refresh videos' }).click();
+  await openVideoDetails();
   const picker = page.getByRole('combobox', { name: 'Video source' });
   for (const label of [
     'open-shadow movie',
@@ -299,6 +336,7 @@ test('discovers open/closed shadow trees, srcdoc, hidden playing video and manua
     host.id = 'late-shadow';
     document.body.append(host);
   });
+  await openVideoDetails();
   await page.getByRole('button', { name: 'Refresh videos' }).click();
   await expect(
     page.getByRole('button', { name: 'Refresh videos' }),
@@ -311,6 +349,7 @@ test('discovers open/closed shadow trees, srcdoc, hidden playing video and manua
     video.setAttribute('aria-label', 'Late attached player');
     host.attachShadow({ mode: 'closed' }).append(video);
   });
+  await openVideoDetails();
   await page.getByRole('button', { name: 'Refresh videos' }).click();
   await expect(
     picker.locator('option').filter({ hasText: 'Late attached player' }),
@@ -325,6 +364,7 @@ test('selects another tab without stealing selection and clears it when that tab
     video.currentTime = 47;
   });
   await page.bringToFront();
+  await openVideoDetails();
   const picker = page.getByRole('combobox', { name: 'Video source' });
   await expect(picker.locator('optgroup')).toHaveCount(2);
   const remote = picker
@@ -380,6 +420,7 @@ test('recovers discovery after the MV3 worker restarts', async () => {
   await cdp.send('ServiceWorker.enable');
   await expect.poll(() => versionId).toBeTruthy();
   await cdp.send('ServiceWorker.stopWorker', { versionId: versionId! });
+  await openVideoDetails();
   await page.getByRole('button', { name: 'Refresh videos' }).click();
   await expect(
     page
@@ -415,6 +456,7 @@ test('keeps native picture-in-picture video discoverable when its element is hid
     )
     .toBe(true);
   await page.getByRole('button', { name: 'Open What did I miss?' }).click();
+  await openVideoDetails();
   const picker = page.getByRole('combobox', { name: 'Video source' });
   const option = picker
     .locator('option')
@@ -444,6 +486,7 @@ test('page navigation and history restoration reconnect the video collector', as
   await page.goBack();
   const launcher = page.getByRole('button', { name: 'Open What did I miss?' });
   if (await launcher.isVisible()) await launcher.click();
+  await openVideoDetails();
   await page.getByRole('button', { name: 'Refresh videos' }).click();
   await expect(
     page
@@ -475,6 +518,7 @@ test('discovers blob, data and sandboxed nested frames through their initiating 
     document.querySelector('#players')!.append(blob, data, sandbox);
   });
   await page.getByRole('button', { name: 'Open What did I miss?' }).click();
+  await openVideoDetails();
   const picker = page.getByRole('combobox', { name: 'Video source' });
   for (const label of [
     'Blob frame movie',
@@ -517,6 +561,7 @@ test('automatically selects a hidden paused PiP video inside a closed shadow roo
   });
   await page.getByRole('button', { name: 'Launch shadow PiP' }).click();
   await page.getByRole('button', { name: 'Open What did I miss?' }).click();
+  await openVideoDetails();
   const picker = page.getByRole('combobox', { name: 'Video source' });
   await expect(picker).toHaveValue('auto');
   await expect(
@@ -526,3 +571,9 @@ test('automatically selects a hidden paused PiP video inside a closed shadow roo
   await page.evaluate(() => document.exitPictureInPicture());
   await expect(page.getByText('No active video detected')).toBeVisible();
 });
+
+async function openVideoDetails() {
+  const details = page.locator('.video-details');
+  if (!(await details.evaluate((element: HTMLDetailsElement) => element.open)))
+    await page.getByLabel('Video details', { exact: true }).click();
+}

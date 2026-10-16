@@ -49,10 +49,8 @@ export function MessageList({
             <div className="message-meta">
               <span>
                 {message.role === 'user' ? 'You' : 'WDIM'}
-                {message.role === 'assistant' && (
-                  <span className="mock-label">
-                    {mode === 'mock' ? 'MOCK' : 'GROUNDED'}
-                  </span>
+                {message.role === 'assistant' && mode === 'mock' && (
+                  <span className="mock-label">MOCK</span>
                 )}
               </span>
               <span>

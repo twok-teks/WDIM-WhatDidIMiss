@@ -38,11 +38,6 @@ export function MediaStatus({ context }: { context: PlaybackContext | null }) {
           </span>
         )}
       </div>
-      {context?.timeline.mapping === 'unverified' && (
-        <p className="boundary-hint">
-          Player time only · Ads are not automatically identified
-        </p>
-      )}
     </>
   );
 }

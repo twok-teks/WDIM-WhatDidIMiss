@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { formatTimestamp } from '../../domain/media/types';
 import { boundaryStillAllowed } from '../../domain/spoilers/boundary';
 import { canAsk } from '../../domain/spoilers/playback';
 import { useChat } from '../../hooks/use-chat';
@@ -12,12 +11,13 @@ import type { Theme } from '../../storage/preferences';
 import { Icon } from '../ui/icon';
 import { ThemeToggle } from '../ui/theme-toggle';
 import { ChatInput } from './chat-input';
-import { MediaStatus } from './media-status';
 import { MessageList } from './message-list';
-import { VideoPicker } from './video-picker';
+import { VideoDetails } from './video-details';
 
 interface ChatPanelProps {
   open: boolean;
+  detailsOpen: boolean;
+  onDetailsChange(open: boolean): void;
   snapshot: VideoSnapshot;
   source: VideoContextSource;
   service: ChatService;
@@ -32,6 +32,8 @@ interface ChatPanelProps {
 export function ChatPanel(props: ChatPanelProps) {
   const {
     open,
+    detailsOpen,
+    onDetailsChange,
     snapshot,
     source,
     service,
@@ -52,7 +54,6 @@ export function ChatPanel(props: ChatPanelProps) {
     { background, earlierWorks },
   );
   const panel = useRef<HTMLElement>(null);
-  const knownTime = context?.position.currentTimeSeconds ?? null;
   const canSend = canAsk(context);
   // Render-time filtering backs up revision-based unmounting: unsafe messages never paint.
   const visibleMessages = messages.filter((message) =>
@@ -82,10 +83,7 @@ export function ChatPanel(props: ChatPanelProps) {
           <span className="brand-mark">
             <Icon name="chat" size={17} />
           </span>
-          <div>
-            <h1>What did I miss?</h1>
-            <span className="header-caption">Your watching companion</span>
-          </div>
+          <h1>What did I miss?</h1>
         </div>
         <div className="header-actions">
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
@@ -109,48 +107,51 @@ export function ChatPanel(props: ChatPanelProps) {
           </button>
         </div>
       </header>
-      <div className="video-context">
-        <VideoPicker source={source} snapshot={snapshot} />
-        <MediaStatus context={context} />
-        {service.mode === 'grounded' && context?.captionStatus && (
-          <p className="boundary-hint" role="status">
-            {context.captionStatus.state === 'blocked'
-              ? 'Caption capture suspended · player timing or ad state changed.'
-              : context.captionStatus.count
-                ? `${context.captionStatus.count} caption excerpts observed since ${formatTimestamp(context.captionStatus.since)}. Earlier scenes are not available.`
-                : 'Turn on the player’s captions and play to build context. Only captions displayed from now on are available.'}
-          </p>
+      <VideoDetails
+        open={detailsOpen}
+        onOpenChange={onDetailsChange}
+        source={source}
+        snapshot={snapshot}
+        grounded={service.mode === 'grounded'}
+      >
+        {service.mode === 'grounded' && (
+          <details className="context-options">
+            <summary>Related context</summary>
+            <label>
+              <input
+                type="checkbox"
+                checked={background}
+                disabled={loading}
+                onChange={(event) => setBackground(event.target.checked)}
+              />{' '}
+              Include sourced background about names already mentioned
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={earlierWorks}
+                disabled={loading}
+                onChange={(event) => setEarlierWorks(event.target.checked)}
+              />{' '}
+              Include reviewed earlier works (may reveal their full plots)
+            </label>
+            <p className="boundary-hint">
+              Background can look up a matching name on Wikidata. Earlier works
+              require a verified relationship and release order in the source
+              catalog. No unrestricted web or plot search.
+            </p>
+          </details>
         )}
-        {context && (
-          <p className="page-title" title={context.pageTitle}>
-            {context.pageTitle}
-            <span>Page title · unverified</span>
-          </p>
-        )}
-      </div>
+      </VideoDetails>
       {visibleMessages.length === 0 ? (
         <div className="empty-state">
-          <span className="empty-icon">
-            <Icon name="chat" size={25} />
-          </span>
-          <h2>
-            A little context.
-            <br />
-            Back to the story.
-          </h2>
+          <h2>Pick up the story.</h2>
           <p>
             {canSend
               ? "Ask about what you've watched so far."
               : context
                 ? 'Tracking is suspended. Your video can keep playing.'
                 : 'Open a video on this page to get started.'}
-          </p>
-          <p className="boundary-hint">
-            {canSend
-              ? context?.timeline.mapping === 'verified'
-                ? `Your boundary is ${formatTimestamp(knownTime)}. Nothing past this point.`
-                : `Player time ${formatTimestamp(knownTime)}. Story timing is unverified.`
-              : 'A known playback position is needed before you can send.'}
           </p>
           {canSend && (
             <div className="suggestions">
@@ -187,40 +188,10 @@ export function ChatPanel(props: ChatPanelProps) {
         </p>
       )}
       <div className="panel-bottom">
-        {service.mode === 'grounded' && (
-          <details className="context-options">
-            <summary>Related context</summary>
-            <label>
-              <input
-                type="checkbox"
-                checked={background}
-                disabled={loading}
-                onChange={(event) => setBackground(event.target.checked)}
-              />{' '}
-              Include sourced background about names already mentioned
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={earlierWorks}
-                disabled={loading}
-                onChange={(event) => setEarlierWorks(event.target.checked)}
-              />{' '}
-              Include reviewed earlier works (may reveal their full plots)
-            </label>
-            <p className="boundary-hint">
-              Background can look up a matching name on Wikidata. Earlier works
-              require a verified relationship and release order in the source
-              catalog. No unrestricted web or plot search.
-            </p>
-          </details>
-        )}
         <ChatInput canSend={canSend} loading={loading} onSend={send} />
         <p className="privacy-note">
           <Icon name="shield" size={12} />
-          {service.mode === 'mock'
-            ? 'Local mock · no story knowledge · nothing sent'
-            : 'Groq AI · observed captions or verified facts · no chat saved'}
+          {service.mode === 'mock' ? 'Local mock' : 'AI · no chat saved'}
         </p>
       </div>
       {debug && (

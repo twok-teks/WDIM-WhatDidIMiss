@@ -66,11 +66,7 @@ test('AI build refuses missing evidence, answers observed captions through the U
     await page.goto('http://localhost:3000');
     await expect(page.locator('#main-video')).toHaveJSProperty('duration', 90);
     await page.getByRole('button', { name: 'Open What did I miss?' }).click();
-    await expect(
-      page.getByText(
-        'Groq AI · observed captions or verified facts · no chat saved',
-      ),
-    ).toBeVisible();
+    await expect(page.getByText('AI · no chat saved')).toBeVisible();
     await page.getByRole('textbox').fill('What happens next?');
     await page.getByRole('button', { name: 'Send message' }).click();
     await expect(
@@ -137,9 +133,11 @@ test('AI build refuses missing evidence, answers observed captions through the U
     }
     const beforeCaptions = calls;
     await page.getByRole('button', { name: 'Enable caption demo' }).click();
+    await page.getByLabel('Video details', { exact: true }).click();
     await expect(
       page.getByText(/caption excerpts observed since/),
     ).toBeVisible();
+    await page.getByLabel('Video details', { exact: true }).click();
     await page
       .locator('#main-video')
       .evaluate((element: HTMLVideoElement) => element.pause());

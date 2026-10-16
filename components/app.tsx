@@ -20,6 +20,7 @@ export function App({
   const snapshot = useSyncExternalStore(source.subscribe, source.getSnapshot);
   const { theme, toggle, storageError } = useTheme(preferences);
   const [open, setOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [conversation, setConversation] = useState(0);
   const launcher = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -34,6 +35,8 @@ export function App({
       <ChatPanel
         key={`${snapshot.safetyRevision}:${conversation}`}
         open={open}
+        detailsOpen={detailsOpen}
+        onDetailsChange={setDetailsOpen}
         snapshot={snapshot}
         source={source}
         service={service}
@@ -44,6 +47,7 @@ export function App({
         onClose={() => {
           minimize();
           setConversation((value) => value + 1);
+          setDetailsOpen(false);
           source.releaseSelection?.();
         }}
         debug={debug}

@@ -37,7 +37,7 @@ The gateway keeps no request logs or saved conversations; only transient rate-li
 
 ## Related context
 
-Both options under **Related context** default off and stay session-local:
+Open **Details → Related context** to find these options. Both default off and stay session-local:
 
 - **Sourced background:** “Who is Khoai Lang Thang?” can look up that name on Wikidata only if it occurs in captured captions. A unique exact label/alias and a human entity are required. Only a small allowlist of creative occupations is returned; article prose, filmographies, cast roles, plots, and fictional identities are excluded. A name match is explicitly not proof of the person shown. Only the name goes to Wikidata, never the transcript or viewing URL. Ambiguous/missing matches and network errors add no facts.
 - **Earlier works:** permits reviewed source entries tied to the current platform asset, with a topic already mentioned and strictly earlier release order in the same verified series. These may spoil those earlier works, as the checkbox states. Sequels, equal/unknown orders, unrelated works, and unrequested topics are excluded.
