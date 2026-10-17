@@ -1,4 +1,6 @@
 import type { CaptionQuery } from './captions';
+import { parseAnswerClaims } from './answer-claims';
+import { parseContextIssues } from './context-feedback';
 import {
   exactKeys,
   isRecord,
@@ -12,7 +14,12 @@ export function validateCaptionResult(
 ): GroundedResult {
   if (
     !isRecord(value) ||
-    !exactKeys(value, ['status', 'facts']) ||
+    !exactKeys(value, [
+      'status',
+      'facts',
+      ...(value.claims === undefined ? [] : ['claims']),
+      ...(value.contextIssues === undefined ? [] : ['contextIssues']),
+    ]) ||
     !['answer', 'insufficient_context'].includes(String(value.status)) ||
     !Array.isArray(value.facts) ||
     value.facts.length > 4 ||
@@ -20,6 +27,20 @@ export function validateCaptionResult(
   )
     throw new Error('Invalid caption result.');
   const facts = value.facts.map(parseFact);
+  const contextIssues =
+    value.contextIssues === undefined
+      ? undefined
+      : parseContextIssues(value.contextIssues);
+  if (
+    contextIssues &&
+    (value.status !== 'insufficient_context' ||
+      contextIssues.some((issue) =>
+        issue.startsWith('background_')
+          ? !query.options.background
+          : !query.options.earlierWorks,
+      ))
+  )
+    throw new Error('Unexpected context feedback.');
   if (
     new Set(facts.map((fact) => `${fact.revealedAtSeconds}:${fact.text}`))
       .size !== facts.length
@@ -36,7 +57,11 @@ export function validateCaptionResult(
       fact.source.kind === 'caption' &&
       !query.captions.some(
         (cue) =>
-          cue.text === fact.text && cue.observedAt === fact.revealedAtSeconds,
+          cue.text === fact.text &&
+          cue.observedAt === fact.revealedAtSeconds &&
+          (cue.origin === 'transcript'
+            ? fact.source?.label === 'Subtitle track (cue end)'
+            : fact.source?.label !== 'Subtitle track (cue end)'),
       )
     )
       throw new Error('Caption was never observed.');
@@ -49,5 +74,9 @@ export function validateCaptionResult(
   return Object.freeze({
     status: value.status as GroundedResult['status'],
     facts: Object.freeze(facts),
+    ...(contextIssues ? { contextIssues } : {}),
+    ...(value.claims === undefined
+      ? {}
+      : { claims: parseAnswerClaims(value.claims, facts) }),
   });
 }

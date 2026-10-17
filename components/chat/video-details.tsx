@@ -7,6 +7,7 @@ import type {
 import { Icon } from '../ui/icon';
 import { MediaStatus } from './media-status';
 import { VideoPicker } from './video-picker';
+import { CaptionDebug } from './caption-debug';
 
 export function VideoDetails({
   open,
@@ -14,6 +15,7 @@ export function VideoDetails({
   source,
   snapshot,
   grounded,
+  active,
   children,
 }: {
   open: boolean;
@@ -21,6 +23,7 @@ export function VideoDetails({
   source: VideoContextSource;
   snapshot: VideoSnapshot;
   grounded: boolean;
+  active: boolean;
   children?: ReactNode;
 }) {
   const { context } = snapshot;
@@ -61,12 +64,18 @@ export function VideoDetails({
           )}
           {captions && (
             <p className="boundary-hint">
-              {captions.count
-                ? `${captions.count} caption excerpts observed since ${formatTimestamp(captions.since)}. Earlier scenes are not available.`
-                : 'Only captions displayed while WDIM is tracking are available.'}
+              {captions.recovery === 'available' ||
+              captions.recovery === 'partial'
+                ? `${captions.count} caption excerpts available through ${formatTimestamp(context?.position.currentTimeSeconds ?? null)}. Earlier subtitles can be recovered from this player; ${captions.recovery === 'partial' ? 'recovery limit reached or some cues unavailable' : 'the exposed track may be incomplete'}.`
+                : captions.count
+                  ? `${captions.count} caption excerpts observed since ${formatTimestamp(captions.since)}. Earlier scenes are not available.`
+                  : 'Only captions displayed while WDIM is tracking are available.'}
+              {captions.recovery === 'unavailable' &&
+                ' This player does not expose a recoverable subtitle track.'}
             </p>
           )}
           {children}
+          {grounded && active && open && <CaptionDebug source={source} />}
           <p className="boundary-hint">
             {grounded
               ? 'Groq AI uses observed captions or verified facts. No chat is saved.'

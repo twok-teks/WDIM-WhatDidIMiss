@@ -4,6 +4,7 @@ import {
   boundaryStillAllowed,
   createSpoilerBoundary,
   type SpoilerBoundary,
+  type KnowledgeFragment,
 } from '../domain/spoilers/boundary';
 import type { ChatService } from '../services/chat/chat-service';
 import type { VideoContextSource } from '../services/video/video-context-provider';
@@ -15,6 +16,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   boundary: SpoilerBoundary;
+  sources?: readonly KnowledgeFragment[];
 }
 
 export function useChat(
@@ -102,6 +104,7 @@ export function useChat(
             id: createId(),
             role: 'assistant',
             text: answer.text,
+            sources: answer.sources,
             boundary: answer.boundary,
           },
         ]);

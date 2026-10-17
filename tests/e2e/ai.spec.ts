@@ -4,11 +4,12 @@ import { createGateway } from '../../server/http';
 import { GroundedService } from '../../server/grounded-service';
 import { parseCatalog } from '../../server/catalog';
 import { GroqEvidenceModel } from '../../server/groq-model';
+import { WikidataBackground } from '../../server/background-lookup';
 
 test.skip(process.env.WDIM_E2E_AI !== '1', 'Requires the explicit AI build.');
 
 test('AI build refuses missing evidence, answers observed captions through the UI, and validates the gateway', async () => {
-  test.setTimeout(60000);
+  test.setTimeout(120000);
   const extension = path.resolve('.output/chrome-mv3');
   const context = await chromium.launchPersistentContext('', {
     channel: 'chromium',
@@ -48,14 +49,33 @@ test('AI build refuses missing evidence, answers observed captions through the U
       ],
     });
     gateway = createGateway(
-      new GroundedService(catalog, {
-        select: async (question, window, signal) => {
-          calls++;
-          expect(JSON.stringify(window)).not.toContain('FUTURE_SECRET');
-          if (liveModel) return liveModel.select(question, window, signal);
-          return { status: 'answer', factIds: ['f0'] };
+      new GroundedService(
+        catalog,
+        {
+          writer: liveModel?.writer ?? {
+            compose: async () => ({
+              claims: [
+                {
+                  text: 'Mira is holding a sealed envelope.',
+                  sourceIndexes: [0],
+                },
+              ],
+            }),
+            verify: async () => ({ answersQuestion: true, supported: [true] }),
+          },
+          select: async (question, window, signal) => {
+            calls++;
+            expect(JSON.stringify(window)).not.toContain('FUTURE_SECRET');
+            if (liveModel) return liveModel.select(question, window, signal);
+            if (question === 'who is khoai lang thang?')
+              return { status: 'insufficient_context', factIds: [] };
+            return { status: 'answer', factIds: ['f0'] };
+          },
         },
-      }),
+        new WikidataBackground(async () => {
+          throw new Error('Unexpected network request in fixture test.');
+        }),
+      ),
       [origin],
     );
     await new Promise<void>((resolve, reject) => {
@@ -97,7 +117,7 @@ test('AI build refuses missing evidence, answers observed captions through the U
         returnByValue: true,
         expression: `new Promise((resolve, reject) => {
           const port = chrome.runtime.connect({ name: 'wdim-grounded-ai-v1' });
-          const timer = setTimeout(() => { port.disconnect(); reject(new Error('Test port timed out')); }, 20000);
+          const timer = setTimeout(() => { port.disconnect(); reject(new Error('Test port timed out')); }, 45000);
           port.onMessage.addListener(value => { clearTimeout(timer); resolve(value); port.disconnect(); });
           port.onDisconnect.addListener(() => { clearTimeout(timer); reject(new Error('Test port disconnected')); });
           port.postMessage(${JSON.stringify(query)});
@@ -107,7 +127,7 @@ test('AI build refuses missing evidence, answers observed captions through the U
       return evaluation.result.value as unknown;
     };
     const result = await sendQuestion('What is Mira holding?');
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       type: 'answer',
       result: {
         status: 'answer',
@@ -135,7 +155,7 @@ test('AI build refuses missing evidence, answers observed captions through the U
     await page.getByRole('button', { name: 'Enable caption demo' }).click();
     await page.getByLabel('Video details', { exact: true }).click();
     await expect(
-      page.getByText(/caption excerpts observed since/),
+      page.getByText(/caption excerpts (observed since|available through)/),
     ).toBeVisible();
     await page.getByLabel('Video details', { exact: true }).click();
     await page
@@ -143,11 +163,17 @@ test('AI build refuses missing evidence, answers observed captions through the U
       .evaluate((element: HTMLVideoElement) => element.pause());
     await page.getByRole('textbox').fill('What is Mira holding?');
     await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(
-      page.getByText(
-        /Caption observed\] Mira holds a sealed envelope at the station\./,
-      ),
-    ).toBeVisible();
+    const response = page.getByRole('log').locator('.message-assistant').last();
+    await expect(response.locator(':scope > p')).toContainText(/envelope/i);
+    await expect(response.locator('blockquote')).toBeHidden();
+    await response.getByText('Sources (1)', { exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(response.locator('blockquote')).toHaveText(
+      'Mira holds a sealed envelope at the station.',
+    );
+    await expect(response.getByText(/Observed at/)).toBeVisible();
+    await page.screenshot({ path: 'test-results/widget-answer-sources.png' });
+    await response.getByText('Sources (1)', { exact: true }).click();
     expect(calls).toBe(beforeCaptions + 1);
     await page.screenshot({ path: 'test-results/widget-caption-ai.png' });
     if (liveModel) {
@@ -165,9 +191,80 @@ test('AI build refuses missing evidence, answers observed captions through the U
     await page.locator('#main-video').evaluate((element: HTMLVideoElement) => {
       element.currentTime = 0;
     });
-    await expect(page.getByText(/Caption observed\] Mira holds/)).toHaveCount(
-      0,
-    );
+    await expect(page.getByRole('log')).toHaveCount(0);
+    if (!liveModel) {
+      await page
+        .locator('#main-video')
+        .evaluate((element: HTMLVideoElement) => {
+          element.currentTime = 47;
+        });
+      await expect(page.getByLabel('Playback position')).toHaveText(
+        '0:47 / 1:30',
+      );
+      await page.getByRole('textbox').fill('What was Mira holding earlier?');
+      await page.getByRole('button', { name: 'Send message' }).click();
+      const recovered = page
+        .getByRole('log')
+        .locator('.message-assistant')
+        .last();
+      await expect(recovered.locator(':scope > p')).toContainText(
+        'sealed envelope',
+      );
+      await recovered.getByText('Sources (1)', { exact: true }).click();
+      await expect(recovered.getByText('Recovered subtitle')).toBeVisible();
+      await expect(recovered.getByText('Available by 0:20')).toBeVisible();
+      await page.getByLabel('Video details', { exact: true }).click();
+      const beforeDebug = calls;
+      await page.getByText('Caption debug', { exact: true }).focus();
+      await page.keyboard.press('Enter');
+      const captured = page.getByRole('list', { name: 'Captured captions' });
+      await expect(captured).toContainText(
+        'Mira holds a sealed envelope at the station.',
+      );
+      await expect(captured).toContainText('Recovered · available by 0:20');
+      await expect(captured).not.toContainText('FUTURE_SECRET');
+      await page.getByLabel('Search captured captions').fill('envelope');
+      await page.getByRole('button', { name: 'Refresh captions' }).click();
+      await expect(captured).toContainText('sealed envelope');
+      expect(calls).toBe(beforeDebug);
+      await page.screenshot({ path: 'test-results/widget-caption-debug.png' });
+      await page.getByText('Caption debug', { exact: true }).click();
+      await expect(captured).toHaveCount(0);
+      await page.getByText('Related context', { exact: true }).click();
+      await page
+        .getByRole('checkbox', {
+          name: 'Include sourced background about names already mentioned',
+        })
+        .check();
+      await page
+        .getByRole('checkbox', {
+          name: 'Include reviewed earlier works (may reveal their full plots)',
+        })
+        .check();
+      await page.getByLabel('Video details', { exact: true }).click();
+      await page.getByRole('textbox').fill('who is khoai lang thang?');
+      await page.getByRole('button', { name: 'Send message' }).click();
+      const explanation = page
+        .getByRole('log')
+        .locator('.message-assistant')
+        .last();
+      await expect(explanation).toContainText(
+        'That name is not in the captions available',
+      );
+      await expect(explanation).toContainText(
+        'no reviewed earlier-work sources are configured',
+      );
+      await page.getByLabel('Video details', { exact: true }).click();
+      await page.getByText('Caption debug', { exact: true }).click();
+      await expect(captured).toContainText('sealed envelope');
+      await page
+        .locator('#main-video')
+        .evaluate((element: HTMLVideoElement) => {
+          element.currentTime = 12;
+        });
+      await expect(page.getByRole('log')).toHaveCount(0);
+      await expect(captured).toHaveCount(0);
+    }
   } finally {
     await context.close();
     if (gateway) {

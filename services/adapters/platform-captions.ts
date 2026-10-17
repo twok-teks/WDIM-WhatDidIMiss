@@ -102,6 +102,7 @@ function visible(element: Element): boolean {
 export function readCaptionSurface(
   video: HTMLVideoElement,
   document: Document,
+  timingOnly = false,
 ): CaptionSurface {
   const identity = platformIdentity(new URL(document.location.href));
   const surface = surfaces[identity.platform] ?? {
@@ -123,6 +124,7 @@ export function readCaptionSurface(
     video.duration <= 0
   )
     return { ...identity, text: '', blocked: true };
+  if (timingOnly) return { ...identity, text: '', blocked: false };
   // Read only displayed active cues. Never enable tracks or read the full cues list.
   const texts: string[] = [];
   for (const track of Array.from(video.textTracks).slice(0, 8)) {

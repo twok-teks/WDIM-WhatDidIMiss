@@ -10,7 +10,7 @@ WDIM detects HTML5 videos, tracks playback, and creates timestamp-bound question
 
 Every provider request carries an immutable `SpoilerBoundary` and an `AllowedContextWindow`. Unknown timing blocks sending. Rewinding, losing the video, or changing media clears the conversation and invalidates pending responses. Predecessor-media context is denied by default and requires explicit approval plus verified release order.
 
-Retrieval removes later facts **before** they reach the model. Only validated selections of trusted facts can become an answer; generated model prose is never displayed. Correct identity, timeline mapping, and reveal annotations remain required.
+Retrieval removes later facts **before** they reach the model. Natural answers are written only from selected evidence, with per-sentence citations and a separate support review. Each answer has a collapsed **Sources** section for original excerpts, timestamps, and external links. Correct identity, timeline mapping, and reveal annotations remain required for verified story retrieval; semantic review can still make mistakes.
 
 ## Current MVP
 
@@ -117,7 +117,7 @@ The adapter knows the page title, not the movie. Automatic selection may choose 
 
 Chrome's internal media controls also include media sessions and Cast routes; they are not a complete public extension discovery API. Remote-only Cast sessions, restricted pages, denied frames, and players with no accessible HTML video cannot be guaranteed. PiP video timing can be tracked, but the widget stays on the webpage; native video/iframe fullscreen and PiP windows cannot host its overlay. DRM internals and movie recognition remain outside this milestone. See [detection coverage](docs/ARCHITECTURE.md#video-detection-and-adapters).
 
-The mock has no story knowledge. The AI build answers from captions observed in the current session; enable captions and let them appear before asking. It cannot reconstruct earlier scenes or recognize a movie from its page title. Sourced background and reviewed earlier works have separate opt-ins. See [platform coverage](docs/PLATFORMS.md). Only theme persists; captions and conversations stay in memory. Site access can be restricted through browser settings.
+The mock has no story knowledge. The AI build answers from captions observed in the current session; enable captions and let them appear before asking. It can recover earlier completed cues when the player exposes a native subtitle track; it cannot reconstruct unavailable transcripts or recognize a movie from its page title. Sourced background and reviewed earlier works have separate opt-ins. See [platform coverage](docs/PLATFORMS.md). Only theme persists; captions and conversations stay in memory. Site access can be restricted through browser settings.
 
 Automated Chromium interactions and both builds are validated. Actual Edge/Firefox interactions still need the documented manual pass.
 

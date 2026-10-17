@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { formatTimestamp } from '../../domain/media/types';
 import type { ChatMessage } from '../../hooks/use-chat';
 import { Icon } from '../ui/icon';
+import { AnswerSources } from './answer-sources';
 
 export function MessageList({
   messages,
@@ -59,6 +60,9 @@ export function MessageList({
               </span>
             </div>
             <p>{message.text}</p>
+            {message.role === 'assistant' && message.sources && (
+              <AnswerSources sources={message.sources} />
+            )}
           </article>
         ))}
         {loading && (

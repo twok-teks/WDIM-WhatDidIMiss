@@ -467,6 +467,54 @@ h2 {
   border-radius: 8px;
   padding: 9px 11px;
 }
+.answer-sources {
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.answer-sources summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 3px 0;
+}
+.answer-sources ol {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+.answer-sources li {
+  padding: 10px;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.source-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+}
+.answer-sources blockquote {
+  margin: 7px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.answer-sources a {
+  display: inline-block;
+  margin-top: 7px;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+.answer-sources a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.message .source-warning {
+  margin-top: 8px;
+  font-size: 10px;
+}
 .thinking {
   display: flex;
   align-items: center;
@@ -550,6 +598,50 @@ h2 {
 .context-options input {
   flex-shrink: 0;
   margin-top: 2px;
+}
+.caption-debug {
+  margin-block: 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.caption-debug summary {
+  cursor: pointer;
+}
+.caption-debug-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block: 7px;
+}
+.caption-debug-controls input {
+  min-width: 0;
+  flex: 1;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--background);
+  color: var(--text-primary);
+  font-size: 11px;
+}
+.caption-debug-controls button {
+  text-decoration: underline;
+}
+.caption-debug-list {
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 0;
+  list-style: none;
+  overscroll-behavior: contain;
+}
+.caption-debug-list li {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.caption-debug-list p {
+  color: var(--text-primary);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 @media (max-width: 420px) {
   .chat-panel {

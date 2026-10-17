@@ -5,6 +5,7 @@ import {
   filterAllowedKnowledge,
   type AllowedContextWindow,
   type SpoilerBoundary,
+  type KnowledgeFragment,
 } from '../../domain/spoilers/boundary';
 
 export interface ChatRequest {
@@ -17,12 +18,21 @@ export interface ChatRequest {
 
 export interface AIProvider {
   readonly mode?: 'mock' | 'grounded';
-  answer(request: ChatRequest, signal: AbortSignal): Promise<string>;
+  answer(
+    request: ChatRequest,
+    signal: AbortSignal,
+  ): Promise<string | ProviderAnswer>;
+}
+
+export interface ProviderAnswer {
+  readonly text: string;
+  readonly sources: readonly KnowledgeFragment[];
 }
 
 export interface ChatAnswer {
   readonly text: string;
   readonly boundary: SpoilerBoundary;
+  readonly sources?: readonly KnowledgeFragment[];
 }
 
 export class ChatService {
@@ -78,8 +88,11 @@ export class ChatService {
       allowedContext: filterAllowedKnowledge(boundary, []),
     });
     signal.throwIfAborted();
-    const text = await this.provider.answer(request, signal);
+    const result = await this.provider.answer(request, signal);
     signal.throwIfAborted();
-    return Object.freeze({ text, boundary });
+    return Object.freeze({
+      ...(typeof result === 'string' ? { text: result } : result),
+      boundary,
+    });
   }
 }

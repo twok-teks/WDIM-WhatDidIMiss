@@ -15,17 +15,21 @@ DOM selectors are best-effort compatibility rules, not stable platform APIs. Mis
 
 ## Timing and missing information
 
-Only displayed active cues or visible caption surfaces are read. Full cue lists containing future transcript text are never traversed. Excerpts are timestamped when observed and filtered against fresh playback before each model call. Capture and requests are bounded to the latest 64 observations and 16,000 characters per connected video. The UI shows the oldest retained observation; it is not a full viewing transcript. Captions/conversations are never saved to disk.
+Displayed captions remain bounded to 64 observations and 16,000 characters per video. In addition, after `seeked` and on a fresh selected-frame read, WDIM can recover past subtitles from one browser-exposed, currently showing native TextTrack. Cue start/end metadata is checked before text is read; only cues ending at or before the fresh player boundary qualify. Straddling and future cue text is not read by recovery. Native recovery inspects at most 10,000 cue timings and retains up to 6,000 completed cues / 256,000 characters in memory. Reused track objects after a media-identity change are excluded until replaced. Multiple showing tracks, hidden/disabled tracks, loading, ads, seeking, or clock mismatch fail closed.
+
+An exposed track may itself be partial or loaded in segments. WDIM reports recovered/partial/unavailable capability, never guaranteed whole-video coverage. This native capability applies on any of the five platforms only when the actual player exposes such a track; the platform DOM readers still capture displayed text only. In particular, the YouTube DOM reader does not download or reconstruct a transcript. A single timestamped caption still may not identify its speaker.
+
+Before a provider request, `domain/spoilers/caption-retrieval.ts` filters by the boundary, ranks matching question terms with nearby context, and caps the request at 64 excerpts / 16,000 characters. This can recover old relevant cues but is lexical retrieval, not exhaustive or cross-language semantic search. Broad recaps may omit parts. Sources show observation time for displayed captions and cue-end availability for recovered subtitles. Nothing is saved to disk.
 
 Rewind, media/context loss, seeking, observed ad markers, and uncertain clock/duration clear the relevant buffer and invalidate stale work. Unchanged stale caption text after a seek is suppressed until it updates. WDIM never pauses/seeks the player, skips ads, enables captions, or intercepts its network requests.
 
-Ad markers are supplemental suspension signals; their absence does not certify an ad-free story timeline. This path answers only from text already displayed. It cannot reconstruct skipped scenes, identify a person visually, or guarantee the source captions are correct or spoiler-free. DOM observations do not certify story-time alignment.
+Ad markers are supplemental suspension signals; their absence does not certify an ad-free story timeline. This path uses displayed text or eligible past subtitle cues. It cannot reconstruct unavailable subtitles or silent visuals, identify a person visually, or guarantee the source captions are correct or spoiler-free. DOM observations do not certify story-time alignment.
 
 In caption-only AI mode, a duration discontinuity starts a new ephemeral, unverified session once finite raw timing is available. Old captions/conversations are discarded and unchanged stale text is suppressed. This permits observing new captions after an ad/content transition without claiming continuity or story mapping. The default mock's conservative duration-uncertainty latch and all verified-story retrieval requirements remain unchanged.
 
 ## Source basis
 
-- Native access uses [TextTrack.activeCues](https://developer.mozilla.org/en-US/docs/Web/API/TextTrack/activeCues), not the complete cue list.
+- Display observation uses [TextTrack.activeCues](https://developer.mozilla.org/en-US/docs/Web/API/TextTrack/activeCues). Recovery uses [TextTrack.cues](https://developer.mozilla.org/en-US/docs/Web/API/TextTrack/cues) timing metadata and reads only eligible completed cue text.
 - YouTube's [caption download endpoint](https://developers.google.com/youtube/v3/docs/captions/download) requires edit permission; it is not a general viewer transcript service for WDIM.
 - Scoped YouTube/Netflix/Prime/Disney selectors are corroborated by a subtitle tool's [documented selectors](https://github.com/ChenYCL/chrome-extension-udemy-translate/blob/main/README.md); Disney lines also appear in the author's [caption reader example](https://github.com/johnlindquist/kit/discussions/695). These sources do not establish current live compatibility.
 - Related names use the [Wikibase API](https://www.mediawiki.org/wiki/Wikibase/API). Article summaries and plots never enter the model.

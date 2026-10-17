@@ -38,7 +38,7 @@ export class BrowserGroundedTransport implements GroundedTransport {
       };
       const timer = setTimeout(
         () => finish(undefined, new Error('AI gateway timed out.')),
-        20000,
+        45000,
       );
       port.onMessage.addListener(message);
       port.onDisconnect.addListener(disconnect);

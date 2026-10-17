@@ -44,10 +44,10 @@ export function installAiGateway(enabled: boolean): void {
             body: JSON.stringify(query),
             signal: AbortSignal.any([
               controller.signal,
-              AbortSignal.timeout(17000),
+              AbortSignal.timeout(42000),
             ]),
           });
-          const result = await readJson(response, 20000);
+          const result = await readJson(response, 32000);
           controller.signal.throwIfAborted();
           port.postMessage({ type: 'answer', result });
         } catch {

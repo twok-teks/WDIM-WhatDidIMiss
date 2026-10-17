@@ -89,6 +89,9 @@ describe('grounded provider', () => {
     const answer = vi.fn<GroundedTransport['answer']>(async () => ({
       status: 'answer',
       facts: [known],
+      claims: [
+        { text: 'Mira is holding a sealed envelope.', sourceIndexes: [0] },
+      ],
     }));
     const result = await new ChatService(
       new GroundedAIProvider({ answer }),
@@ -96,7 +99,8 @@ describe('grounded provider', () => {
     expect(answer.mock.calls[0]?.[0]).toEqual(query());
     expect(JSON.stringify(answer.mock.calls)).not.toContain('PRIVATE');
     expect(JSON.stringify(answer.mock.calls)).not.toContain('private.example');
-    expect(result.text).toContain('[0:10] Mira holds a sealed envelope.');
+    expect(result.text).toBe('Mira is holding a sealed envelope.');
+    expect(result.sources).toEqual([known]);
     expect(result.boundary.maximumAllowedTimestamp).toBe(47);
   });
 
@@ -228,17 +232,35 @@ describe('server evidence boundary', () => {
 describe('Groq API contract', () => {
   it('uses GPT-OSS on_demand with bounded evidence, strict IDs, no history/tools/streaming/reasoning', async () => {
     const fetcher = vi.fn<typeof fetch>(
-      async () =>
+      async (_url, options) =>
         new Response(
           JSON.stringify({
             choices: [
               {
                 finish_reason: 'stop',
                 message: {
-                  content: JSON.stringify({
-                    status: 'answer',
-                    factIds: ['f0'],
-                  }),
+                  content: JSON.stringify(
+                    JSON.parse(String(options?.body)).response_format
+                      .json_schema.name === 'wdim_supported_answer'
+                      ? {
+                          claims: [
+                            {
+                              text: 'Mira is holding a sealed envelope.',
+                              sourceIndexes: [0],
+                            },
+                          ],
+                        }
+                      : JSON.parse(String(options?.body)).response_format
+                            .json_schema.name === 'wdim_answer_support'
+                        ? {
+                            answersQuestion: true,
+                            supported: [true],
+                          }
+                        : {
+                            status: 'answer',
+                            factIds: ['f0'],
+                          },
+                  ),
                   reasoning: 'DO NOT DISPLAY',
                 },
               },
@@ -251,7 +273,14 @@ describe('Groq API contract', () => {
       new GroqEvidenceModel('test-only-key', fetcher),
     );
     const result = await service.answer(query(), new AbortController().signal);
-    expect(result).toEqual({ status: 'answer', facts: [known] });
+    expect(result).toEqual({
+      status: 'answer',
+      facts: [known],
+      claims: [
+        { text: 'Mira is holding a sealed envelope.', sourceIndexes: [0] },
+      ],
+    });
+    expect(fetcher).toHaveBeenCalledTimes(3);
     expect(fetcher.mock.calls[0]?.[0]).toBe(
       'https://api.groq.com/openai/v1/chat/completions',
     );

@@ -89,11 +89,17 @@ export class VideoContextProvider implements VideoContextSource {
 
   readVideo(id: string): DetectedVideo | null {
     this.refresh(true);
-    const found = this.report.videos.find((video) => video.id === id);
+    let found = this.report.videos.find((video) => video.id === id);
     const element = this.videos.find(
       (video) => this.records.get(video)?.id === id,
     );
     if (!found || !element) return null;
+    if (this.captureCaptions) {
+      this.captions.recover(element, found.context);
+      this.refresh(false);
+      found = this.report.videos.find((video) => video.id === id);
+      if (!found) return null;
+    }
     const evidence = this.captions.read(element, found.context.media.id);
     return evidence
       ? { ...found, context: { ...found.context, captionEvidence: evidence } }
@@ -191,6 +197,13 @@ export class VideoContextProvider implements VideoContextSource {
       performance.now() - this.lastRefresh >= 250
     ) {
       this.refresh(false, event.type === 'play' ? video : undefined);
+      if (this.captureCaptions && event.type === 'seeked') {
+        const context = this.records.get(video)?.context;
+        if (context) {
+          this.captions.recover(video, context);
+          this.refresh(false);
+        }
+      }
     }
   };
 

@@ -1,6 +1,7 @@
 import type { PlaybackContext } from '../media/types';
 import { canAsk } from './playback';
 import { exactKeys, isRecord } from './grounding';
+import { retrieveCaptions } from './caption-retrieval';
 
 export const PLATFORMS = [
   'youtube',
@@ -13,8 +14,9 @@ export const PLATFORMS = [
 export type Platform = (typeof PLATFORMS)[number];
 export interface Caption {
   readonly text: string;
-  // Observation time, not an inferred story timestamp or a cue's start time.
+  // Observation time, or conservative cue END time for recovered subtitles.
   readonly observedAt: number;
+  readonly origin?: 'transcript';
 }
 export interface CaptionStatus {
   readonly platform: Platform;
@@ -22,6 +24,7 @@ export interface CaptionStatus {
   readonly count: number;
   readonly since: number | null;
   readonly state: 'waiting' | 'ready' | 'blocked';
+  readonly recovery?: 'available' | 'partial' | 'unavailable';
 }
 export interface CaptionEvidence {
   readonly mediaId: string;
@@ -45,7 +48,7 @@ export interface CaptionQuery {
   readonly options: ContextOptions;
 }
 export const NO_CAPTIONS =
-  'I don’t have any captions observed for this video yet. Turn on the player’s subtitles or closed captions and let it play. I can use captions captured from this point onward; I can’t reconstruct earlier scenes or see the picture.';
+  'I don’t have any captions observed or recovered for this video yet. Turn on the player’s subtitles or closed captions and let it play. Earlier captions are available only when the player exposes a compatible subtitle track. I can’t see the picture.';
 
 export function parseCaptionQuery(value: unknown): CaptionQuery {
   if (
@@ -97,7 +100,12 @@ export function parseCaptionQuery(value: unknown): CaptionQuery {
   const captions = value.captions.map((item: unknown): Caption => {
     if (
       !isRecord(item) ||
-      !exactKeys(item, ['text', 'observedAt']) ||
+      !exactKeys(item, [
+        'text',
+        'observedAt',
+        ...(item.origin === undefined ? [] : ['origin']),
+      ]) ||
+      (item.origin !== undefined && item.origin !== 'transcript') ||
       typeof item.text !== 'string' ||
       !item.text.trim() ||
       item.text.length > 600 ||
@@ -109,7 +117,13 @@ export function parseCaptionQuery(value: unknown): CaptionQuery {
       throw new Error('Caption exceeds the boundary.');
     characters += item.text.length;
     if (characters > 16000) throw new Error('Caption window too large.');
-    return Object.freeze({ text: item.text, observedAt: item.observedAt });
+    return Object.freeze({
+      text: item.text,
+      observedAt: item.observedAt,
+      ...(item.origin === 'transcript'
+        ? { origin: 'transcript' as const }
+        : {}),
+    });
   });
   return Object.freeze({
     kind: 'captions',
@@ -143,13 +157,11 @@ export function captionQuery(
   )
     return null;
   const time = context.position.currentTimeSeconds!;
-  let size = 0;
-  const captions = context.captionEvidence.captions
-    .filter((cue) => cue.observedAt <= time)
-    .slice(-64)
-    .reverse()
-    .filter((cue) => (size += cue.text.length) <= 16000)
-    .reverse();
+  const captions = retrieveCaptions(
+    question,
+    context.captionEvidence.captions,
+    time,
+  );
   return parseCaptionQuery({
     kind: 'captions',
     question,

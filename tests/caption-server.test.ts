@@ -5,6 +5,8 @@ import { WikidataBackground } from '../server/background-lookup';
 import { parseRelated, selectRelated } from '../server/related-context';
 import { parseCaptionQuery } from '../domain/spoilers/captions';
 import type { EvidenceModel } from '../server/grounded-service';
+import { validateCaptionResult } from '../domain/spoilers/caption-result';
+import { renderGroundedResult } from '../domain/spoilers/grounding';
 
 const query = () =>
   parseCaptionQuery({
@@ -130,10 +132,110 @@ describe('related evidence', () => {
   });
 });
 describe('bounded online background tool', () => {
+  it('explains missing names and missing earlier-work sources on refusal without a network lookup', async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    const service = new CaptionService(
+      { select: async () => ({ status: 'insufficient_context', factIds: [] }) },
+      new WikidataBackground(fetcher),
+    );
+    const input = {
+      ...query(),
+      question: 'who is khoai lang thang?',
+      options: { background: true, earlierWorks: true },
+    };
+    const result = await service.answer(input, new AbortController().signal);
+    expect(result.contextIssues).toEqual([
+      'background_name_not_observed',
+      'earlier_catalog_unavailable',
+    ]);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(
+      renderGroundedResult(validateCaptionResult(result, input)),
+    ).toContain('That name is not in the captions');
+    expect(() =>
+      validateCaptionResult(
+        { ...result, contextIssues: ['arbitrary provider text'] },
+        input,
+      ),
+    ).toThrow();
+    expect(() => validateCaptionResult(result, query())).toThrow();
+    expect(() =>
+      validateCaptionResult(
+        {
+          status: 'answer',
+          facts: [
+            {
+              mediaId: input.boundary.mediaId,
+              text: input.captions[0]!.text,
+              revealedAtSeconds: 10,
+              source: {
+                kind: 'caption',
+                label: 'Caption observed during playback',
+              },
+            },
+          ],
+          contextIssues: ['background_no_match'],
+        },
+        input,
+      ),
+    ).toThrow();
+  });
+  it('distinguishes temporary background failures and still answers supported caption questions', async () => {
+    const lookup = new WikidataBackground(
+      vi.fn<typeof fetch>().mockRejectedValue(new Error('PRIVATE_ERROR')),
+    );
+    const input = {
+      ...query(),
+      options: { background: true, earlierWorks: false },
+    };
+    const fail = await lookup.lookup(input, new AbortController().signal);
+    expect(fail).toEqual({ facts: [], issue: 'background_lookup_unavailable' });
+    const service = new CaptionService(
+      { select: async () => ({ status: 'answer', factIds: ['f0'] }) },
+      lookup,
+    );
+    const result = await service.answer(input, new AbortController().signal);
+    expect(result.status).toBe('answer');
+    expect(result.contextIssues).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain('PRIVATE_ERROR');
+  });
   const response = (body: unknown) =>
     new Response(JSON.stringify(body), { status: 200 });
   const claim = (id: string) => ({
     mainsnak: { datavalue: { value: { id } } },
+  });
+  it('accepts supported direct and polite questions', async () => {
+    for (const question of [
+      'who is khoai lang thang?',
+      'Can you tell me about Khoai Lang Thang?',
+      'Please tell me about Khoai Lang Thang.',
+    ]) {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValueOnce(
+          response({ search: [{ id: 'Q123', label: 'Khoai Lang Thang' }] }),
+        )
+        .mockResolvedValueOnce(
+          response({
+            entities: {
+              Q123: {
+                claims: { P31: [claim('Q5')], P106: [claim('Q17125263')] },
+              },
+            },
+          }),
+        );
+      const result = await new WikidataBackground(fetcher).lookup(
+        {
+          ...query(),
+          question,
+          captions: [{ text: 'Khoai Lang Thang', observedAt: 10 }],
+          options: { background: true, earlierWorks: false },
+        },
+        new AbortController().signal,
+      );
+      expect(result.facts).toHaveLength(1);
+      expect(result.issue).toBeUndefined();
+    }
   });
   it('does not look up names absent from watched captions or when disabled', async () => {
     const fetcher = vi.fn<typeof fetch>();

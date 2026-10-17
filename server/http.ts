@@ -113,7 +113,7 @@ export function createGateway(
     active++;
     const controller = new AbortController();
     const abort = () => controller.abort();
-    const timer = setTimeout(abort, 15000);
+    const timer = setTimeout(abort, 40000);
     request.once('aborted', abort);
     request.on('error', abort);
     response.once('close', () => {

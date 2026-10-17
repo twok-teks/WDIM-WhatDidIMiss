@@ -1,9 +1,14 @@
-import { formatTimestamp } from '../media/types';
+import {
+  parseAnswerClaims,
+  answerClaimText,
+  type AnswerClaim,
+} from './answer-claims';
 import {
   filterAllowedKnowledge,
   type KnowledgeFragment,
   type SpoilerBoundary,
 } from './boundary';
+import { CONTEXT_FEEDBACK, type ContextIssue } from './context-feedback';
 
 export const INSUFFICIENT_CONTEXT =
   "I don't have enough verified information at your current position to answer. I won't infer missing details or confirm what happens later.";
@@ -22,6 +27,8 @@ export interface GroundedQuery {
 export interface GroundedResult {
   readonly status: 'answer' | 'insufficient_context';
   readonly facts: readonly KnowledgeFragment[];
+  readonly claims?: readonly AnswerClaim[];
+  readonly contextIssues?: readonly ContextIssue[];
 }
 
 export const NO_EVIDENCE: GroundedResult = Object.freeze({
@@ -133,7 +140,7 @@ export function parseFact(value: unknown): KnowledgeFragment {
   });
 }
 
-// A trusted catalog supplies the text. Model-authored prose and reasoning never render.
+// The gateway checks semantic support; the client rechecks structure and boundary.
 export function validateGroundedResult(
   value: unknown,
   boundary: SpoilerBoundary,
@@ -141,7 +148,11 @@ export function validateGroundedResult(
   if (
     boundary.timelineMapping !== 'verified' ||
     !isRecord(value) ||
-    !exactKeys(value, ['status', 'facts']) ||
+    !exactKeys(value, [
+      'status',
+      'facts',
+      ...(value.claims === undefined ? [] : ['claims']),
+    ]) ||
     !['answer', 'insufficient_context'].includes(String(value.status)) ||
     !Array.isArray(value.facts) ||
     value.facts.length > 4
@@ -160,15 +171,23 @@ export function validateGroundedResult(
   }
   return Object.freeze({
     status: value.status as GroundedResult['status'],
-    facts: Object.freeze(
-      facts.sort((a, b) => a.revealedAtSeconds - b.revealedAtSeconds),
-    ),
+    facts: Object.freeze(facts),
+    ...(value.claims === undefined
+      ? {}
+      : { claims: parseAnswerClaims(value.claims, facts) }),
   });
 }
 
 export function renderGroundedResult(result: GroundedResult): string {
-  if (result.status !== 'answer') return INSUFFICIENT_CONTEXT;
-  return `From the available evidence through your current position:\n\n${result.facts.map((fact) => `[${formatTimestamp(fact.revealedAtSeconds)}${fact.source ? ` · ${fact.source.kind === 'caption' ? 'Caption observed' : fact.source.kind === 'background' ? 'Outside background' : 'Earlier work'}` : ''}] ${fact.text}${fact.source?.url ? `\nSource: ${fact.source.label} — ${fact.source.url}` : ''}`).join('\n\n')}`;
+  if (result.status !== 'answer')
+    return result.contextIssues?.length
+      ? `I couldn't find enough supported information to answer. ${result.contextIssues.map((issue) => CONTEXT_FEEDBACK[issue]).join(' ')}`
+      : INSUFFICIENT_CONTEXT;
+  if (result.claims)
+    return result.claims
+      .map((claim) => answerClaimText(claim, result.facts))
+      .join('\n\n');
+  return 'I found relevant evidence, but a written answer is unavailable. You can read the excerpts under Sources.';
 }
 
 export function selectModelEvidence(

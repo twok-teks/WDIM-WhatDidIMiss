@@ -113,6 +113,7 @@ export function ChatPanel(props: ChatPanelProps) {
         source={source}
         snapshot={snapshot}
         grounded={service.mode === 'grounded'}
+        active={open}
       >
         {service.mode === 'grounded' && (
           <details className="context-options">
@@ -136,9 +137,10 @@ export function ChatPanel(props: ChatPanelProps) {
               Include reviewed earlier works (may reveal their full plots)
             </label>
             <p className="boundary-hint">
-              Background can look up a matching name on Wikidata. Earlier works
-              require a verified relationship and release order in the source
-              catalog. No unrestricted web or plot search.
+              These options allow extra sources; they do not guarantee an
+              answer. Background supports “Who is [full name]?” for people named
+              in available captions. Earlier works need reviewed sources for
+              this video and verified release order.
             </p>
           </details>
         )}

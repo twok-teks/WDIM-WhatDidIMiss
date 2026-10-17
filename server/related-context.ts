@@ -2,6 +2,8 @@ import { readFile, stat } from 'node:fs/promises';
 import type { CaptionQuery } from '../domain/spoilers/captions';
 import type { KnowledgeFragment } from '../domain/spoilers/boundary';
 import { exactKeys, isRecord, parseFact } from '../domain/spoilers/grounding';
+import { normalizeTopic } from '../domain/spoilers/topic';
+export { normalizeTopic } from '../domain/spoilers/topic';
 
 export interface RelatedEntry {
   readonly assetId: string;
@@ -14,13 +16,6 @@ export interface RelatedEntry {
   readonly currentRelease: number | null;
   readonly sourceRelease: number | null;
 }
-export const normalizeTopic = (text: string) =>
-  text
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLocaleLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
 export function containsTopic(text: string, topic: string): boolean {
   return ` ${normalizeTopic(text)} `.includes(` ${normalizeTopic(topic)} `);
 }

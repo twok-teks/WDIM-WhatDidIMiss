@@ -7,8 +7,21 @@ import {
   parseGroundedQuery,
   renderGroundedResult,
   validateGroundedResult,
+  type GroundedResult,
 } from '../../domain/spoilers/grounding';
-import type { AIProvider, ChatRequest } from './chat-service';
+import type { AIProvider, ChatRequest, ProviderAnswer } from './chat-service';
+
+function present(result: GroundedResult): ProviderAnswer {
+  const used = result.claims
+    ? new Set(result.claims.flatMap((claim) => [...claim.sourceIndexes]))
+    : null;
+  return Object.freeze({
+    text: renderGroundedResult(result),
+    sources: Object.freeze(
+      result.facts.filter((_, index) => !used || used.has(index)),
+    ),
+  });
+}
 
 export interface GroundedTransport {
   answer(query: ProviderQuery, signal: AbortSignal): Promise<unknown>;
@@ -18,7 +31,10 @@ export class GroundedAIProvider implements AIProvider {
   readonly mode = 'grounded' as const;
   constructor(private transport: GroundedTransport) {}
 
-  async answer(request: ChatRequest, signal: AbortSignal): Promise<string> {
+  async answer(
+    request: ChatRequest,
+    signal: AbortSignal,
+  ): Promise<string | ProviderAnswer> {
     signal.throwIfAborted();
     if (
       request.playback.captionStatus &&
@@ -32,7 +48,7 @@ export class GroundedAIProvider implements AIProvider {
       if (!query || !query.captions.length) return NO_CAPTIONS;
       const result = await this.transport.answer(query, signal);
       signal.throwIfAborted();
-      return renderGroundedResult(validateCaptionResult(result, query));
+      return present(validateCaptionResult(result, query));
     }
     if (
       !canAsk(request.playback) ||
@@ -57,8 +73,6 @@ export class GroundedAIProvider implements AIProvider {
     });
     const result = await this.transport.answer(query, signal);
     signal.throwIfAborted();
-    return renderGroundedResult(
-      validateGroundedResult(result, request.boundary),
-    );
+    return present(validateGroundedResult(result, request.boundary));
   }
 }

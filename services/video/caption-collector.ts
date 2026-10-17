@@ -6,6 +6,7 @@ import type {
 import type { PlaybackContext } from '../../domain/media/types';
 import { canAsk } from '../../domain/spoilers/playback';
 import { readCaptionSurface } from '../adapters/platform-captions';
+import { readPastCaptions, type PastCaptions } from '../adapters/past-captions';
 
 interface Session {
   mediaId: string;
@@ -15,6 +16,9 @@ interface Session {
   since: number;
   blocked: boolean;
   suppressedText: string;
+  history?: PastCaptions;
+  tracks: readonly TextTrack[];
+  excludedTracks: readonly TextTrack[];
 }
 export class CaptionCollector {
   private sessions = new WeakMap<HTMLVideoElement, Session>();
@@ -38,6 +42,13 @@ export class CaptionCollector {
       (time !== null && time < session.previousTime) ||
       blocked !== session.blocked
     ) {
+      const tracks = Array.from(video.textTracks).slice(0, 8);
+      const excludedTracks = [
+        ...(session?.excludedTracks ?? []),
+        ...(session && session.mediaId !== context.media.id
+          ? session.tracks
+          : []),
+      ].filter((track) => tracks.includes(track));
       session = {
         mediaId: context.media.id,
         previousTime: time ?? 0,
@@ -46,13 +57,15 @@ export class CaptionCollector {
         captions: [],
         since: time ?? 0,
         blocked,
+        tracks,
+        excludedTracks,
       };
       this.sessions.set(video, session);
     }
     if (!blocked && time !== null) {
       session.previousTime = time;
-      // A caption must actually have appeared on screen in this session. A seek to
-      // a later position never imports the skipped transcript. Each rewind clears it.
+      // This buffer contains displayed captions only. Timed history is recovered
+      // separately after a seek or selected read, and cleared on invalidation.
       if (surface.text !== session.suppressedText) session.suppressedText = '';
       if (
         surface.text &&
@@ -72,18 +85,20 @@ export class CaptionCollector {
       }
       session.previousText = surface.text;
     }
+    session.tracks = Array.from(video.textTracks).slice(0, 8);
+    const count =
+      session.captions.length + (session.history?.captions.length ?? 0);
+    const since = Math.min(
+      session.captions[0]?.observedAt ?? Infinity,
+      session.history?.captions[0]?.observedAt ?? Infinity,
+    );
     return Object.freeze({
       platform: surface.platform,
       assetId: surface.assetId,
-      count: session.captions.length,
-      since: blocked
-        ? null
-        : (session.captions[0]?.observedAt ?? session.since),
-      state: blocked
-        ? 'blocked'
-        : session.captions.length
-          ? 'ready'
-          : 'waiting',
+      count,
+      since: blocked ? null : Number.isFinite(since) ? since : session.since,
+      state: blocked ? 'blocked' : count ? 'ready' : 'waiting',
+      ...(session.history ? { recovery: session.history.state } : {}),
     });
   }
 
@@ -92,7 +107,31 @@ export class CaptionCollector {
     if (!session || session.mediaId !== mediaId || session.blocked) return;
     return Object.freeze({
       mediaId,
-      captions: Object.freeze(session.captions.slice(-64)),
+      captions: Object.freeze(this.available(session, session.previousTime)),
     });
+  }
+
+  recover(video: HTMLVideoElement, context: PlaybackContext): void {
+    const session = this.sessions.get(video);
+    if (
+      !session ||
+      session.mediaId !== context.media.id ||
+      session.blocked ||
+      !canAsk(context) ||
+      context.position.currentTimeSeconds !== video.currentTime
+    )
+      return;
+    session.history = readPastCaptions(
+      video,
+      video.currentTime,
+      session.excludedTracks,
+    );
+    session.history.captions.sort((a, b) => a.observedAt - b.observedAt);
+  }
+
+  private available(session: Session, time: number): Caption[] {
+    return [...(session.history?.captions ?? []), ...session.captions]
+      .filter((cue) => cue.observedAt <= time)
+      .sort((a, b) => a.observedAt - b.observedAt);
   }
 }

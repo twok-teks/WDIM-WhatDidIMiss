@@ -15,8 +15,10 @@ import { isRecord } from '../domain/spoilers/grounding';
 import { CaptionService } from './caption-service';
 import type { BackgroundLookup } from './background-lookup';
 import type { RelatedEntry } from './related-context';
+import { writeSupportedAnswer, type AnswerWriter } from './answer-writer';
 
 export interface EvidenceModel {
+  readonly writer?: AnswerWriter;
   select(
     question: string,
     window: AllowedContextWindow,
@@ -70,9 +72,16 @@ export class GroundedService {
     if (!window.fragments.length) return NO_EVIDENCE;
     const selection = await this.model.select(query.question, window, signal);
     signal.throwIfAborted();
-    return validateGroundedResult(
+    const result = validateGroundedResult(
       selectModelEvidence(selection, window.fragments),
       boundary,
+    );
+    return writeSupportedAnswer(
+      this.model.writer,
+      query.question,
+      window,
+      result,
+      signal,
     );
   }
 }
